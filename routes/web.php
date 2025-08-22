@@ -62,6 +62,8 @@ Route::middleware('manual.auth')->group(function () {
 
         // Dashboard admin -> kirim $counts, dst. dari controller
         Route::get('/', [AdminHomeController::class, 'index'])->name('home');
+        Route::get('region/export', [RegionController::class, 'export'])->name('region.export');
+        Route::get('/serpo/export', [SerpoController::class, 'export'])->name('serpo.export');
 
         // Checklist admin (index/show/destroy)
         Route::resource('checklists', AdminChecklistController::class)->only(['index','show','destroy']);
@@ -77,6 +79,7 @@ Route::middleware('manual.auth')->group(function () {
         // Dependent dropdown utk halaman admin (kalau perlu)
         Route::get('serpo/by-region/{id_region}', [SerpoController::class,  'byRegion'])->name('serpo.byRegion');
         Route::get('segmen/by-serpo/{id_serpo}',  [SegmenController::class, 'bySerpo'])->name('segmen.bySerpo');
+
     });
 });
 

@@ -52,8 +52,11 @@
     </div>
 </div>
 
-{{-- meta csrf sudah ada di layout, tak masalah kalau ada lagi --}}
 <meta name="csrf-token" content="{{ csrf_token() }}">
+
+{{-- DataTables Buttons (untuk tombol custom Export) --}}
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 
 <script>
 $(function(){
@@ -67,23 +70,39 @@ $(function(){
     const swalConfirm = (text='Hapus region ini?') =>
         Swal.fire({title:'Yakin?', text, icon:'warning', showCancelButton:true, confirmButtonText:'Ya, hapus', cancelButtonText:'Batal'});
 
-    // ---- Route helpers (pakai nama route admin.*) ----
+    // ---- Routes ----
     const ROUTES = {
         index   : "{{ route('admin.region.index') }}",
         store   : "{{ route('admin.region.store') }}",
         update  : "{{ route('admin.region.update', ':id') }}",
         destroy : "{{ route('admin.region.destroy', ':id') }}",
+        export  : "{{ route('admin.region.export') }}", // ⬅️ server-side export
     };
     const urlUpdate  = id => ROUTES.update.replace(':id', id);
     const urlDestroy = id => ROUTES.destroy.replace(':id', id);
 
     const table = $('#table-region').DataTable({
         processing:true, serverSide:true,
+        // letakkan Buttons (B) setelah length (l)
+        dom: '<"row align-items-center"<"col-sm-6 d-flex"lB><"col-sm-6"f>>rt<"row"<"col-sm-5"i><"col-sm-7"p>>',
         ajax: ROUTES.index,
         columns: [
             {data:'DT_RowIndex', name:'DT_RowIndex', orderable:false, searchable:false},
             {data:'nama_region', name:'nama_region'},
             {data:'action', name:'action', orderable:false, searchable:false},
+        ],
+        buttons: [
+            {
+                text: 'Export Excel (Semua)',
+                className: 'btn btn-success btn-sm',
+                action: function(){
+                    // ikutkan global search
+                    const q = $('#table-region_filter input').val() || '';
+                    const params = new URLSearchParams();
+                    if (q) params.set('q', q);
+                    window.location = ROUTES.export + (params.toString() ? ('?'+params.toString()) : '');
+                }
+            }
         ]
     });
 
@@ -104,7 +123,7 @@ $(function(){
         $('#modalRegion').modal('show');
     });
 
-    // Create / Update (SweetAlert)
+    // Create / Update
     $('#formRegion').on('submit', function(e){
         e.preventDefault();
         const id   = $('#id_region').val();
@@ -112,7 +131,6 @@ $(function(){
         const url  = id ? urlUpdate(id) : ROUTES.store;
 
         $('#btnSave').prop('disabled',true).text('Menyimpan...');
-
         $.post(url, data)
         .done(res => {
             $('#modalRegion').modal('hide');
@@ -121,28 +139,23 @@ $(function(){
         })
         .fail(xhr => {
             let msg = xhr.responseJSON?.message || 'Terjadi kesalahan';
-            if(xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
+            if (xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
             swalError(msg);
         })
-        .always(() => {
-            $('#btnSave').prop('disabled',false).text('Simpan');
-        });
+        .always(() => $('#btnSave').prop('disabled',false).text('Simpan'));
     });
 
-    // Delete (SweetAlert confirm)
+    // Delete
     $(document).on('click','.btn-delete', function(){
         const id = $(this).data('id');
         swalConfirm('Region ini akan dihapus.')
         .then(r => {
-            if(!r.isConfirmed) return;
+            if (!r.isConfirmed) return;
             $.post(urlDestroy(id), {_method:'DELETE'})
-            .done(res => {
-                table.ajax.reload(null,false);
-                swalSuccess(res.message ?? 'Berhasil dihapus');
-            })
+            .done(res => { table.ajax.reload(null,false); swalSuccess(res.message ?? 'Berhasil dihapus'); })
             .fail(xhr => {
                 let msg = xhr.responseJSON?.message || 'Gagal menghapus data';
-                if(xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
+                if (xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
                 swalError(msg);
             });
         });

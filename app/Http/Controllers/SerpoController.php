@@ -7,9 +7,21 @@ use App\Models\Region;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Yajra\DataTables\Facades\DataTables;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\SerpoExport;
 
 class SerpoController extends Controller
 {
+    public function export(Request $request)
+    {
+        $filters = [
+            'id_region' => $request->input('id_region'),
+            'q'         => $request->input('q'), // search global dari DataTables
+        ];
+
+        return Excel::download(new SerpoExport($filters), 'data_serpo.xlsx');
+    }
+
     public function index(Request $request)
     {
         if ($request->ajax()) {

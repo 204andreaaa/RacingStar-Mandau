@@ -5,10 +5,21 @@ namespace App\Http\Controllers;
 use App\Models\Region;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
+use App\Exports\RegionExport;
 
 class RegionController extends Controller
 {
+    public function export(Request $request)
+    {
+        $filters = [
+            'q' => $request->query('q'), // global search dari DataTables
+        ];
+
+        return Excel::download(new RegionExport($filters), 'data_region.xlsx');
+    }
+
     public function index(Request $request)
     {
         if ($request->ajax()) {

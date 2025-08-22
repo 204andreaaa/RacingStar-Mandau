@@ -14,7 +14,7 @@
         </div>
 
         <div class="card-body">
-            {{-- Template filter (nanti dipindah ke toolbar DataTables) --}}
+            {{-- Template filter (dipindah ke toolbar DataTables) --}}
             <div id="dt-filters-template" style="display:none;">
                 <div id="dt-filters" class="d-inline-flex align-items-center" style="gap:8px;margin-left:12px;">
                     <select id="filter_region" class="form-control form-control-sm" style="min-width:220px;">
@@ -76,6 +76,10 @@
 
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
+{{-- DataTables Buttons (untuk tombol custom Export) --}}
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+
 <script>
 $(function(){
     $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
@@ -86,34 +90,49 @@ $(function(){
         store   : "{{ route('admin.serpo.store') }}",
         update  : "{{ route('admin.serpo.update', ':id') }}",   // replace(':id', id)
         destroy : "{{ route('admin.serpo.destroy', ':id') }}",  // replace(':id', id)
+        export  : "{{ route('admin.serpo.export') }}",          // server-side export semua data
     };
     const urlUpdate  = id => ROUTES.update.replace(':id', id);
     const urlDestroy = id => ROUTES.destroy.replace(':id', id);
 
-    // SweetAlert helpers
-    const swalSuccess = (text='Berhasil diproses') =>
-        Swal.fire({title:'Sukses', text, icon:'success', confirmButtonText:'OK'});
-    const swalError = (text='Terjadi kesalahan') =>
-        Swal.fire({title:'Gagal', text, icon:'error', confirmButtonText:'OK'});
-    const swalConfirm = (text='Hapus data ini?') =>
-        Swal.fire({title:'Yakin?', text, icon:'warning', showCancelButton:true, confirmButtonText:'Ya, hapus', cancelButtonText:'Batal'});
+    // SweetAlert helpers (anggap sudah include di layout)
+    const swalSuccess = (t='Berhasil diproses') => Swal.fire({title:'Sukses', text:t, icon:'success'});
+    const swalError   = (t='Terjadi kesalahan') => Swal.fire({title:'Gagal', text:t, icon:'error'});
+    const swalConfirm = (t='Hapus data ini?')    => Swal.fire({title:'Yakin?', text:t, icon:'warning', showCancelButton:true, confirmButtonText:'Ya, hapus', cancelButtonText:'Batal'});
 
-    // DataTable + filter di toolbar
+    // DataTable + filter di toolbar + tombol export server-side
     const table = $('#table-serpo').DataTable({
         processing:true, serverSide:true,
-        dom: '<"row align-items-center"<"col-sm-6 d-flex"l<"dt-extra-filters d-inline-flex align-items-center ms-2 ml-2">><"col-sm-6"f>>rt<"row"<"col-sm-5"i><"col-sm-7"p>>',
+        // letakkan Buttons (B) setelah length (l) supaya nempel dengan "Show entries"
+        dom: '<"row align-items-center"<"col-sm-6 d-flex"lB<"dt-extra-filters d-inline-flex align-items-center ms-2 ml-2">><"col-sm-6"f>>rt<"row"<"col-sm-5"i><"col-sm-7"p>>',
         ajax: {
             url: ROUTES.index,
             data: d => { d.id_region = $('#filter_region').val(); }
         },
         columns: [
-            {data:'DT_RowIndex', name:'DT_RowIndex', orderable:false, searchable:false},
-            {data:'region', name:'region', orderable:false, searchable:false},
-            {data:'nama_serpo', name:'nama_serpo'},
-            {data:'action', name:'action', orderable:false, searchable:false},
+            {data:'DT_RowIndex', orderable:false, searchable:false},
+            {data:'region',      orderable:false, searchable:false},
+            {data:'nama_serpo'},
+            {data:'action',      orderable:false, searchable:false},
+        ],
+        buttons: [
+            {
+                text: 'Export Excel (Semua)',
+                className: 'btn btn-success btn-sm',
+                action: function(){
+                    // ikuti filter Region + global search yang aktif
+                    const id_region = $('#filter_region').val() || '';
+                    const q         = $('#table-serpo_filter input').val() || '';
+                    const params = new URLSearchParams();
+                    if (id_region) params.set('id_region', id_region);
+                    if (q)         params.set('q', q);
+                    window.location = ROUTES.export + (params.toString() ? ('?'+params.toString()) : '');
+                }
+            }
         ]
     });
 
+    // pindahkan filter ke toolbar
     const $filters = $('#dt-filters-template #dt-filters');
     $('.dt-extra-filters').append($filters);
     $('#dt-filters-template').remove();
@@ -155,7 +174,7 @@ $(function(){
         })
         .fail(xhr => {
             let msg = xhr.responseJSON?.message || 'Terjadi kesalahan';
-            if(xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
+            if (xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
             swalError(msg);
         })
         .always(() => {
@@ -171,12 +190,12 @@ $(function(){
             if(!r.isConfirmed) return;
             $.post(urlDestroy(id), {_method:'DELETE'})
             .done(res => {
-                table.ajaxReload ? table.ajaxReload(null,false) : table.ajax.reload(null,false);
+                table.ajax.reload(null,false);
                 swalSuccess(res.message ?? 'Berhasil dihapus');
             })
             .fail(xhr => {
                 let msg = xhr.responseJSON?.message || 'Gagal menghapus data';
-                if(xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
+                if (xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
                 swalError(msg);
             });
         });

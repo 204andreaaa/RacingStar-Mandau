@@ -63,7 +63,7 @@
             <textarea name="description" id="description" class="form-control" rows="3"></textarea>
           </div>
           <div class="form-group">
-            <label>Poin</label>
+            <label>Star</label>
             <input type="number" name="point" id="point" class="form-control" min="0" value="0" required>
           </div>
           <div class="form-check">
