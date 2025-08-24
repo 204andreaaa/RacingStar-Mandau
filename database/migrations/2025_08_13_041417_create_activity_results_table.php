@@ -20,8 +20,8 @@ return new class extends Migration
 
             $table->dateTime('submitted_at');           // waktu submit
             $table->string('status')->default('done');  // done/skipped (string dulu)
-            $table->string('before_photo');             // path foto before
-            $table->string('after_photo');              // path foto after
+            $table->string('before_photo')->nullable();             // path foto before
+            $table->string('after_photo')->nullable();              // path foto after
             $table->unsignedInteger('point_earned')->default(0); // snapshot poin
             $table->text('note')->nullable();           // catatan opsional
 

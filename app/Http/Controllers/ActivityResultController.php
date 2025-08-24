@@ -43,10 +43,17 @@ class ActivityResultController extends Controller
 
             // Upload bila ada file baru
             if ($req->hasFile("before_photo.$aid")) {
-                $record->before_photo = $req->file("before_photo.$aid")->store('checklists/before','public');
+                // optional: hapus file lama
+                if ($record->before_photo && Storage::disk('public')->exists($record->before_photo)) {
+                    Storage::disk('public')->delete($record->before_photo);
+                }
+                $record->before_photo = $req->file("before_photo.$aid")->store('checklists/before', 'public');
             }
             if ($req->hasFile("after_photo.$aid")) {
-                $record->after_photo = $req->file("after_photo.$aid")->store('checklists/after','public');
+                if ($record->after_photo && Storage::disk('public')->exists($record->after_photo)) {
+                    Storage::disk('public')->delete($record->after_photo);
+                }
+                $record->after_photo = $req->file("after_photo.$aid")->store('checklists/after', 'public');
             }
 
             // Isi field lainnya

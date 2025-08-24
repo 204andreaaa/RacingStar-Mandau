@@ -39,7 +39,7 @@ class AdminChecklistController extends Controller
                 ->editColumn('submitted_at', fn($r) => $r->submitted_at ? date('Y-m-d H:i', strtotime($r->submitted_at)) : '-')
                 ->addColumn('lokasi', fn($r) => "{$r->nama_region} / {$r->nama_serpo} / {$r->nama_segmen}")
                 ->addColumn('action', function($r){
-                    $detail = '<a href="'.route('admin.checklists.show',$r->id).'" class="btn btn-sm btn-outline-primary me-1">Detail</a>';
+                    $detail = '<a href="'.route('admin.checklists.show',$r->id).'" class="btn btn-sm btn-outline-primary mr-1">Detail</a>';
                     $del    = '<button class="btn btn-sm btn-outline-danger btn-del" data-id="'.$r->id.'">Delete</button>';
                     return $detail.$del;
                 })

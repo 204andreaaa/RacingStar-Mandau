@@ -2,7 +2,6 @@
 
 @section('main')
 <div class="content-wrapper">
-  <section class="content-header"><h1>Rekap Checklist</h1></section>
 
   <div class="card">
     <div class="card-header d-flex align-items-center flex-wrap gap-2">

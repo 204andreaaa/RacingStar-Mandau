@@ -24,69 +24,67 @@
     </div>
 
     <div class="card-body">
-      <table id="table" class="table table-bordered">
-        <thead>
-          <tr>
-            <th>No</th>
-            <th>Mulai</th>
-            <th>Selesai</th>
-            <th>Team</th>
-            <th>Nama</th>
-            <th>Lokasi (Region / Serpo / Segmen)</th>
-            <th>Total Star</th>
-            <th>Status</th>
-            <th>Aksi</th>
-          </tr>
-        </thead>
-      </table>
+      <div class="table-responsive">
+        <table id="table" class="table table-bordered">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Mulai</th>
+              <th>Selesai</th>
+              <th>Team</th>
+              <th>Nama</th>
+              <th>Lokasi (Region / Serpo / Segmen)</th>
+              <th>Total Star</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
-{{-- meta csrf sudah ada di layout, tapi aman kalau mau taruh lagi --}}
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 <script>
 $(function(){
-    $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
+  $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
 
-    // route helpers
-    const url = "{{ route('checklists.table-ceklis') }}";
+  const url = "{{ route('checklists.table-ceklis') }}";
 
-    const table = $('#table').DataTable({
+  const table = $('#table').DataTable({
     processing: true,
     serverSide: true,
-    order: [[1, 'desc']], // sort by "Mulai" (started_at) terbaru dulu
+    order: [[1, 'desc']],
     ajax: {
-        url: url,
-        data: d => {
+      url: url,
+      data: d => {
         d.team      = $('#f_team').val();
         d.status    = $('#f_status').val();
         d.date_from = $('#f_from').val();
         d.date_to   = $('#f_to').val();
-        }
+      }
     },
     columns: [
-        { data:'DT_RowIndex', orderable:false, searchable:false },
-        { data:'started_at',  name:'started_at' },
-        { data:'submitted_at',name:'submitted_at' },
-        { data:'team',        name:'team' },
-        { data:'user_nama',   name:'user_nama' },
-        { data:'lokasi',      name:'lokasi', orderable:false },
-        { data:'total_point', name:'total_point', className:'text-end' },
-        { data:'status',      name:'status' },
-        { data:'action',      orderable:false, searchable:false },
+      { data:'DT_RowIndex', orderable:false, searchable:false },
+      { data:'started_at',  name:'started_at' },
+      { data:'submitted_at',name:'submitted_at' },
+      { data:'team',        name:'team' },
+      { data:'user_nama',   name:'user_nama' },
+      { data:'lokasi',      name:'lokasi', orderable:false },
+      { data:'total_point', name:'total_point', className:'text-end' },
+      { data:'status',      name:'status' },
+      { data:'action',      orderable:false, searchable:false, className:'text-nowrap' },
     ]
-});
+  });
 
-  // filter & reset
-$('#btnFilter').on('click', () => table.ajax.reload());
-    $('#btnReset').on('click', function(){
-        $('#f_team, #f_status').val('');
-        $('#f_from, #f_to').val('');
-        table.ajax.reload();
-    });
+  $('#btnFilter').on('click', () => table.ajax.reload());
+  $('#btnReset').on('click', function(){
+    $('#f_team, #f_status').val('');
+    $('#f_from, #f_to').val('');
+    table.ajax.reload();
+  });
 });
 </script>
-
 @endsection
