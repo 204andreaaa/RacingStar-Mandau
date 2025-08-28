@@ -30,7 +30,6 @@ return new class extends Migration
                 ->references('id_serpo')->on('serpos')
                 ->onDelete('cascade');
 
-            // ❌ tidak ada id_segmen di sini, karena pindah ke pivot
             $table->timestamps();
 
             $table->unique(['nik']); // bagusnya unik juga

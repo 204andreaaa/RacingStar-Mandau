@@ -6,185 +6,149 @@
 @endphp
 
 <div class="content-wrapper">
-  <section class="content-header">
-    <h1>Ceklis Aktivitas</h1>
+  <section class="content-header mb-3">
+    <h1 class="mb-1">Data Activity</h1>
     <div class="text-muted">
       Team: {{ $checklist->team }} • User ID: {{ $checklist->user_id }}
     </div>
   </section>
 
-  <div class="card">
-    <div class="card-header d-flex align-items-center justify-content-between">
-      <h3 class="mb-0">Isi Checklist</h3>
-      <small class="text-muted">Centang <strong>Done</strong> untuk mengaktifkan upload foto</small>
-    </div>
+  <form method="post"
+        action="{{ route('checklists.item.bulkStore', $checklist->id) }}"
+        enctype="multipart/form-data">
+    @csrf
 
-    <form method="post"
-          action="{{ route('checklists.item.bulkStore', $checklist->id) }}"
-          enctype="multipart/form-data">
-      @csrf
+    @if(session('success'))
+      <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+    @if($errors->any())
+      <div class="alert alert-danger">
+        <div class="mb-1 fw-bold">Periksa input:</div>
+        <ul class="mb-0">
+          @foreach($errors->all() as $e) <li>{{ $e }}</li> @endforeach
+        </ul>
+      </div>
+    @endif
 
-      <div class="card-body">
-        @if(session('success'))
-          <div class="alert alert-success">{{ session('success') }}</div>
-        @endif
-        @if($errors->any())
-          <div class="alert alert-danger">
-            <div class="mb-1 fw-bold">Periksa input:</div>
-            <ul class="mb-0">
-              @foreach($errors->all() as $e) <li>{{ $e }}</li> @endforeach
-            </ul>
-          </div>
-        @endif
+    <div class="row g-3">
+      @foreach($activities as $i => $a)
+        @php
+          $already = $items->firstWhere('activity_id', $a->id);
+          $isDone  = $already && $already->status === 'done';
+          $beforeExists = $already && $already->before_photo && Storage::disk('public')->exists($already->before_photo);
+          $afterExists  = $already && $already->after_photo && Storage::disk('public')->exists($already->after_photo);
+        @endphp
 
-        <div class="table-responsive">
-          <table class="table table-bordered align-middle">
-            <thead>
-              <tr>
-                <th style="width:40px;">#</th>
-                <th>Aktivitas</th>
-                <th style="width:90px;">Done?</th>
-                <th style="width:260px;">Foto Before</th>
-                <th style="width:260px;">Foto After</th>
-                <th>Catatan</th>
-              </tr>
-            </thead>
-            <tbody>
-              @foreach($activities as $i => $a)
-                @php
-                  $already = $items->firstWhere('activity_id', $a->id);
-                  $isDone  = $already && $already->status === 'done';
-                  $beforeExists = $already && Storage::disk('public')->exists($already->before_photo);
-                  $afterExists  = $already && Storage::disk('public')->exists($already->after_photo);
-                @endphp
-                <tr class="{{ $isDone ? 'table-success' : '' }}">
-                  <td class="text-center">{{ $i+1 }}</td>
-                  <td>
-                    <div class="fw-bold mb-1">{{ $a->name }}</div>
-                    <div class="small text-muted">{{ $a->description }}</div>
-                    <span class="badge badge-info mt-1 d-inline-block">{{ $a->point }} Star</span>
-                    @if($already)
-                      <div class="small text-success mt-1">Sudah tersimpan ({{ ucfirst($already->status) }})</div>
+        <div class="col-12">
+          <div class="card activity-card shadow-sm {{ $isDone ? 'border-success' : '' }}">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                  <h5 class="mb-1">{{ $i+1 }}. {{ $a->name }}</h5>
+                  @if($a->description)
+                    <p class="small text-muted mb-1">{{ $a->description }}</p>
+                  @endif
+                  <span class="badge bg-info">{{ $a->point }} Star</span>
+                  @if($already)
+                    <span class="badge bg-success ms-1">Tersimpan</span>
+                  @endif
+                </div>
+                <div class="form-check">
+                  <input type="checkbox"
+                         class="form-check-input toggle-done"
+                         name="status[{{ $a->id }}]"
+                         data-row="{{ $a->id }}"
+                         @if($isDone) checked @endif>
+                  <label class="form-check-label">Done</label>
+                </div>
+              </div>
+
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Foto Before</label>
+                  <div class="d-flex gap-2 align-items-start flex-nowrap">
+                    @if($beforeExists)
+                      @php $url = Storage::disk('public')->url($already->before_photo); @endphp
+                      <a href="{{ $url }}" target="_blank">
+                        <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="before">
+                      </a>
                     @endif
-                  </td>
-
-                  <td class="text-center">
-                    <input type="checkbox"
-                           class="form-check-input toggle-done"
-                           name="status[{{ $a->id }}]"
+                    <input type="file"
+                           name="before_photo[{{ $a->id }}]"
+                           class="form-control file-before"
                            data-row="{{ $a->id }}"
-                           aria-label="Aktifkan Done untuk {{ $a->name }}"
-                           @if($isDone) checked @endif>
-                  </td>
+                           @if(!$isDone) disabled @endif>
+                  </div>
+                </div>
 
-                  <td>
-                    <div class="d-flex gap-2 align-items-start">
-                      <div style="width:90px">
-                        @if($beforeExists)
-                          @php $url = Storage::disk('public')->url($already->before_photo); @endphp
-                          <a href="{{ $url }}" target="_blank">
-                            <img src="{{ $url }}" class="img-fluid rounded border" alt="before">
-                          </a>
-                        @endif
-                      </div>
-                      <input type="file"
-                             name="before_photo[{{ $a->id }}]"
-                             class="form-control file-before"
-                             data-row="{{ $a->id }}"
-                             @if(!$isDone) disabled @endif>
-                    </div>
-                  </td>
-
-                  <td>
-                    <div class="d-flex gap-2 align-items-start">
-                      <div style="width:90px">
-                        @if($afterExists)
-                          @php $url = Storage::disk('public')->url($already->after_photo); @endphp
-                          <a href="{{ $url }}" target="_blank">
-                            <img src="{{ $url }}" class="img-fluid rounded border" alt="after">
-                          </a>
-                        @endif
-                      </div>
-                      <input type="file"
-                             name="after_photo[{{ $a->id }}]"
-                             class="form-control file-after"
-                             data-row="{{ $a->id }}"
-                             @if(!$isDone) disabled @endif>
-                    </div>
-                  </td>
-
-                  <td>
-                    <textarea name="note[{{ $a->id }}]"
-                              class="form-control"
-                              rows="1"
-                              placeholder="opsional"
-                              data-row="{{ $a->id }}"
-                              @if(!$isDone) disabled @endif>{{ $already->note ?? '' }}</textarea>
-                  </td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card-footer d-flex flex-wrap gap-2">
-        <button class="btn btn-primary" name="finish" value="0">Simpan</button>
-        <button class="btn btn-success" name="finish" value="1">Simpan &amp; Selesaikan</button>
-      </div>
-    </form>
-  </div>
-
-  @if($items->count())
-    <div class="card mt-3">
-      <div class="card-header"><h3 class="mb-0">Item yang sudah tersimpan</h3></div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-bordered">
-            <thead>
-              <tr><th>Waktu</th><th>Aktivitas</th><th>Status</th><th>Star</th><th>Before</th><th>After</th></tr>
-            </thead>
-            <tbody>
-              @foreach($items as $it)
-                <tr>
-                  <td data-label="Waktu">{{ $it->submitted_at }}</td>
-                  <td data-label="Aktivitas">{{ $it->activity->name ?? '-' }}</td>
-                  <td data-label="Status">{{ ucfirst($it->status) }}</td>
-                  <td data-label="Poin">{{ $it->point_earned }}</td>
-                  <td data-label="Before">
-                    @if($it->before_photo && Storage::disk('public')->exists($it->before_photo))
-                      @php $url = Storage::disk('public')->url($it->before_photo); @endphp
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Foto After</label>
+                  <div class="d-flex gap-2 align-items-start flex-nowrap">
+                    @if($afterExists)
+                      @php $url = Storage::disk('public')->url($already->after_photo); @endphp
                       <a href="{{ $url }}" target="_blank">
-                        <img src="{{ $url }}" width="80" class="img-thumbnail" alt="before">
+                        <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="after">
                       </a>
-                    @else
-                      <span class="text-muted">-</span>
                     @endif
-                  </td>
-                  <td data-label="After">
-                    @if($it->after_photo && Storage::disk('public')->exists($it->after_photo))
-                      @php $url = Storage::disk('public')->url($it->after_photo); @endphp
-                      <a href="{{ $url }}" target="_blank">
-                        <img src="{{ $url }}" width="80" class="img-thumbnail" alt="after">
-                      </a>
-                    @else
-                      <span class="text-muted">-</span>
-                    @endif
-                  </td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
+                    <input type="file"
+                           name="after_photo[{{ $a->id }}]"
+                           class="form-control file-after"
+                           data-row="{{ $a->id }}"
+                           @if(!$isDone) disabled @endif>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label fw-semibold">Catatan</label>
+                  <textarea name="note[{{ $a->id }}]"
+                            class="form-control"
+                            rows="2"
+                            placeholder="opsional"
+                            data-row="{{ $a->id }}"
+                            @if(!$isDone) disabled @endif>{{ $already->note ?? '' }}</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      @endforeach
     </div>
-  @endif
+
+    <div class="mt-4 d-flex gap-2">
+      <button class="btn btn-primary px-4" name="finish" value="0">💾 Simpan</button>
+      <button class="btn btn-success px-4" name="finish" value="1">✅ Simpan &amp; Selesaikan</button>
+    </div>
+  </form>
 </div>
+
+{{-- STYLE tambahan biar lebih menarik --}}
+<style>
+  @media (max-width: 576px) {
+    h1, h3, h5 { font-size: 1rem !important; }     /* judul lebih kecil */
+    .card-title { font-size: 0.95rem !important; }
+    .card .form-label { font-size: 0.85rem !important; }
+    .card .small, .text-muted { font-size: 0.75rem !important; }
+    .badge { font-size: 0.7rem !important; }
+    .btn { font-size: 0.85rem !important; padding: .35rem .75rem !important; }
+    textarea, input, select { font-size: 0.85rem !important; }
+  }
+  .activity-card {
+    transition: 0.2s;
+    border-left: 5px solid #0dcaf0; /* biru default */
+  }
+  .activity-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,.1);
+  }
+  .activity-card.border-success {
+    border-left: 5px solid #198754; /* hijau kalau sudah done */
+  }
+</style>
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  // Enable/disable file & note saat Done dicentang
+  // tetap sama, toggle enable/disable
   document.querySelectorAll('.toggle-done').forEach(function(cb){
     cb.addEventListener('change', function(){
       const id = this.getAttribute('data-row');

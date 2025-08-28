@@ -14,7 +14,7 @@
       <table id="table-aktifitas" class="table table-bordered">
         <thead>
           <tr>
-            <th>No</th><th>Team</th><th>Nama</th><th>Poin</th><th>Status</th><th>Aksi</th>
+            <th>No</th><th>Team</th><th>Nama</th><th>Star</th><th>Status</th><th>Aksi</th>
           </tr>
         </thead>
       </table>

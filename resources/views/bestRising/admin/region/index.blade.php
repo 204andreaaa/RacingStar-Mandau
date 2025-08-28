@@ -2,9 +2,6 @@
 
 @section('main')
 <div class="content-wrapper">
-    <section class="content-header">
-        <h1>Region</h1>
-    </section>
 
     <div class="card">
         {{-- Header: tombol di kanan --}}

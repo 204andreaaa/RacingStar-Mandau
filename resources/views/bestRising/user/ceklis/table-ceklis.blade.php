@@ -4,13 +4,9 @@
 <div class="content-wrapper">
   <div class="card">
     <div class="card-header d-flex align-items-center flex-wrap gap-2">
-      <h3 class="mb-0">Data Ceklis</h3>
-      <div class="ms-auto ml-auto d-flex gap-2">
-        <select id="f_team" class="form-control form-control-sm" style="min-width:130px">
-          <option value="">Semua Team</option>
-          <option value="SERPO">SERPO</option>
-          <option value="NOC">NOC</option>
-        </select>
+      <h3 class="mb-0">Data Activity</h3>
+      <!-- tambahkan class .filters supaya gampang diatur responsif -->
+      <div class="ms-auto ml-auto d-flex gap-2 filters">
         <select id="f_status" class="form-control form-control-sm" style="min-width:130px">
           <option value="">Semua Status</option>
           <option value="pending">Pending</option>
@@ -46,6 +42,63 @@
 </div>
 
 <meta name="csrf-token" content="{{ csrf_token() }}">
+
+{{-- ====== RESPONSIVE ONLY: tidak mengubah fungsi ====== --}}
+<style>
+  /* Ruang nafas */
+  .content-wrapper { padding: 0.75rem; }
+  .card { overflow: hidden; }
+
+  /* Table: lebih padat di mobile */
+  @media (max-width: 768px) {
+    #table { font-size: 13px; }
+    #table td, #table th { padding: .45rem .5rem; vertical-align: middle; }
+  }
+
+  /* Header jadi kolom, filter jadi grid di HP */
+  @media (max-width: 768px) {
+    .card-header {
+      flex-direction: column;
+      align-items: stretch !important;
+      gap: .5rem !important;
+    }
+    .card-header h3 { margin-bottom: .25rem !important; }
+    .filters {
+      width: 100%;
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .5rem !important;
+    }
+    .filters .btn { width: 100%; }
+  }
+
+  /* HP kecil banget → 1 kolom */
+  @media (max-width: 480px) {
+    .filters { grid-template-columns: 1fr; }
+  }
+
+  /* Table container */
+  .table-responsive { width: 100%; overflow-x: auto; }
+
+  /* Bungkus teks panjang di kolom Lokasi (kolom ke-6) */
+  #table td:nth-child(6) { white-space: normal; word-break: break-word; }
+
+  /* Sembunyikan kolom “berat” di layar kecil (tanpa sentuh data/fungsi) 
+     Urutan kolom: 1 No | 2 Mulai | 3 Selesai | 4 Team | 5 Nama | 6 Lokasi | 7 Total | 8 Status | 9 Aksi
+  */
+  /* ≤576px: hide Team(4) & Lokasi(6) */
+  @media (max-width: 576px) {
+    #table thead th:nth-child(4), #table tbody td:nth-child(4),
+    #table thead th:nth-child(6), #table tbody td:nth-child(6) { display: none; }
+  }
+  /* ≤400px: hide Total Star(7) juga */
+  @media (max-width: 400px) {
+    #table thead th:nth-child(7), #table tbody td:nth-child(7) { display: none; }
+  }
+
+  /* Kolom aksi biar nggak kebungkus */
+  #table td:last-child { white-space: nowrap; }
+</style>
 
 <script>
 $(function(){

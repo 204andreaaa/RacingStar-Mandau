@@ -2,9 +2,6 @@
 
 @section('main')
 <div class="content-wrapper">
-    <section class="content-header">
-        <h1>Serpo</h1>
-    </section>
 
     <div class="card">
         {{-- Header: hanya judul + tombol di kanan --}}

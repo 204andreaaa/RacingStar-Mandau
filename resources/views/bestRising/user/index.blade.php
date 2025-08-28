@@ -2,7 +2,7 @@
 
 @section('main')
 @php
-    $userName = $userName ?? (auth()->user()->nama ?? 'Best Rising');
+    $userName = $userName ?? (auth()->user()->nama ?? 'di Racing Star');
     $nocUrl   = route('checklists.start', ['team' => 'NOC']);
     $serpoUrl = route('checklists.start', ['team' => 'SERPO']);
     $helpUrl  = $helpUrl  ?? '#';
@@ -48,7 +48,7 @@
             <div class="card">
                 <div class="card-body select-area">
                     <div class="text-center mb-4">
-                        <div class="h5 text-muted mb-1">Silakan pilih kamu sebagai apa</div>
+                        <div class="h5 text-muted mb-1">Silakan Lanjutkan</div>
                     </div>
 
                     <div class="row justify-content-center g-3">

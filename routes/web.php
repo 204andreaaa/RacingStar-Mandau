@@ -64,7 +64,10 @@ Route::middleware('manual.auth')->group(function () {
         Route::get('/', [AdminHomeController::class, 'index'])->name('home');
         Route::get('region/export', [RegionController::class, 'export'])->name('region.export');
         Route::get('/serpo/export', [SerpoController::class, 'export'])->name('serpo.export');
+        Route::get('checklists/export', [AdminChecklistController::class, 'export'])->name('checklists.export');
+        Route::get('checklists/allresult/export', [AdminChecklistController::class, 'exportAllResult'])->name('checklists.allresult.export');
 
+        Route::get('checklists/allresult', [AdminChecklistController::class, 'allresult'])->name('checklists.allresult');
         // Checklist admin (index/show/destroy)
         Route::resource('checklists', AdminChecklistController::class)->only(['index','show','destroy']);
 

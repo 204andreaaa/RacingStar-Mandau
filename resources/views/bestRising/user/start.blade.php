@@ -26,7 +26,7 @@
       <div class="d-flex align-items-center justify-content-between">
         <div>
           <h1 class="mb-1">
-            Mulai Ceklis <span class="text-muted">({{ $team }})</span>
+            Mulai Ceklis Aktifitas <span class="text-muted">({{ $team }})</span>
           </h1>
           <div class="text-muted small">Pilih detail di bawah ini sebelum lanjut ke ceklis aktivitas.</div>
         </div>

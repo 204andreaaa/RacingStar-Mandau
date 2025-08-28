@@ -5,9 +5,6 @@
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 <div class="content-wrapper">
-    <section class="content-header">
-        <h1>Kategori User</h1>
-    </section>
 
     <section class="content">
         <div class="row">

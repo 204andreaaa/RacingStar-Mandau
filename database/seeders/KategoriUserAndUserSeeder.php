@@ -66,7 +66,7 @@ class KategoriUserAndUserSeeder extends Seeder
              * ----------------------------------------------------------------*/
             // Admin
             $admin = UserBestrising::firstOrCreate(
-                ['email' => 'admin@bestrising.test'],
+                ['email' => 'admin@racingstar.test'],
                 [
                     'nik'              => '00000001',
                     'nama'             => 'Admin Racing Star',

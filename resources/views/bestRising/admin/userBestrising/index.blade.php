@@ -2,14 +2,11 @@
 
 @section('main')
 <div class="content-wrapper">
-    <section class="content-header">
-        <h1>Manajemen User Racing Star</h1>
-    </section>
 
     <div class="col-md-12">
         <div class="card">
-            <div class="card-header d-flex align-items-center">
-                <h3 class="mb-0">Data User</h3>
+            <div class="card-header d-flex align-items-center flex-wrap gap-2">
+                <h3 class="mb-0">Manajemen User Racing Star</h3>
                 <button class="btn btn-primary ms-auto ml-auto" id="btnAdd">Tambah User</button>
             </div>
             <div class="card-body">
@@ -112,12 +109,12 @@
                             </div>
                         </div>
 
-                        {{-- SEGMEN --}}
+                        {{-- SEGMEN (disembunyikan untuk SERPO karena auto oleh backend) --}}
                         <div class="col-12 d-none field-segmen">
                             <div class="form-group">
                                 <label>Segmen (bisa pilih lebih dari satu)</label>
                                 <select name="id_segmen[]" id="form_segmen" class="form-control" multiple>
-                                    {{-- diisi via AJAX by serpo --}}
+                                    {{-- tidak dipakai untuk SERPO --}}
                                 </select>
                                 <small class="text-muted">Tahan Ctrl/Command atau gunakan klik untuk multi-pilih.</small>
                             </div>
@@ -146,12 +143,11 @@ $(function(){
         update  : "{{ route('admin.user-bestrising.update', ':id') }}",
         destroy : "{{ route('admin.user-bestrising.destroy', ':id') }}",
         serpoByRegion : "{{ route('admin.serpo.byRegion', ['id_region' => 'RID']) }}",
-        segmenBySerpo : "{{ route('admin.segmen.bySerpo', ['id_serpo' => 'SID']) }}",
+        segmenBySerpo : "{{ route('admin.segmen.bySerpo', ['id_serpo' => 'SID']) }}", // tidak dipakai di UI SERPO
     };
     const urlUpdate   = id => ROUTES.update.replace(':id', id);
     const urlDestroy  = id => ROUTES.destroy.replace(':id', id);
     const urlByRegion = rid => ROUTES.serpoByRegion.replace('RID', rid);
-    const urlBySerpo  = sid => ROUTES.segmenBySerpo.replace('SID', sid);
 
     const swalSuccess = (text='Berhasil diproses') =>
         Swal.fire({title:'Sukses', text, icon:'success', confirmButtonText:'OK'});
@@ -183,37 +179,33 @@ $(function(){
         else $el.removeAttr('required');
     }
 
-    // tampil/required fields sesuai kategori (ADMIN / SERPO / NOC)
     function updateVisibilityByCategory() {
         const text = ($('#kategori_user_id option:selected').text() || '').trim().toUpperCase();
 
-        // reset dulu
+        // reset
         $('.field-region, .field-serpo, .field-segmen').addClass('d-none');
         setRequired($region, false);
         setRequired($serpo, false);
         setRequired($segmen, false);
 
         if (text.includes('ADMIN')) {
-            // semuanya sembunyi, tidak required
-            // kosongkan nilai
             $region.val('');
             $serpo.empty().append('<option value="">-- Pilih Serpo --</option>').val('');
             $segmen.empty();
         } else if (text.includes('SERPO')) {
-            // semua muncul & required
-            $('.field-region, .field-serpo, .field-segmen').removeClass('d-none');
+            // HANYA Region + Serpo tampil & required
+            $('.field-region, .field-serpo').removeClass('d-none');
             setRequired($region, true);
             setRequired($serpo, true);
-            setRequired($segmen, true);
+            // segmen di-hide (auto backend)
+            $segmen.empty();
         } else if (text.includes('NOC')) {
-            // hanya region yang muncul & required
+            // hanya region
             $('.field-region').removeClass('d-none');
             setRequired($region, true);
-            // kosongkan serpo & segmen
-            $serpo.empty().append('<option value="">-- Pilih Serpo --</option>').val('');
+            $serpo.empty().append('<option value="">-- Pilih Serpo --</option>');
             $segmen.empty();
         } else {
-            // default: sembunyi semua (bisa lu ubah kalau ada kategori lain)
             $region.val('');
             $serpo.empty().append('<option value="">-- Pilih Serpo --</option>').val('');
             $segmen.empty();
@@ -238,44 +230,25 @@ $(function(){
             .always(() => $select.prop('disabled', false));
     }
 
-    function loadSegmenBySerpo(serpoId, $select, selectedArray = []) {
-        $select.prop('disabled', true).empty().append(new Option('Memuat Segmen...', ''));
-
-        if (!serpoId) {
-            $select.prop('disabled', false).empty();
-            return $.Deferred().resolve().promise();
-        }
-
-        return $.get(urlBySerpo(serpoId))
-            .then(items => {
-                $select.empty();
-                items.forEach(it => $select.append(new Option(it.text, it.id)));
-                if (Array.isArray(selectedArray) && selectedArray.length) {
-                    $select.val(selectedArray.map(String));
-                }
-            })
-            .always(() => $select.prop('disabled', false));
-    }
-
     $('#kategori_user_id').on('change', function(){
         updateVisibilityByCategory();
     });
 
     $('#form_region').on('change', function(){
-        // Kalau kategori NOC, serpo/segmen disembunyiin—nggak perlu load.
         const kat = ($('#kategori_user_id option:selected').text()||'').toUpperCase();
         if (kat.includes('NOC')) {
             $serpo.empty().append('<option value="">-- Pilih Serpo --</option>');
             $segmen.empty();
             return;
         }
-        loadSerpoByRegion(this.value, $serpo);
-        $segmen.empty();
+        if (kat.includes('SERPO')) {
+            loadSerpoByRegion(this.value, $serpo);
+            $segmen.empty(); // tidak dipakai
+        }
     });
 
-    $('#form_serpo').on('change', function(){
-        loadSegmenBySerpo(this.value, $segmen);
-    });
+    // Tidak perlu load segmen saat serpo change (auto di backend)
+    $('#form_serpo').on('change', function(){ /* no-op */ });
 
     // Add
     $('#btnAdd').click(function() {
@@ -291,9 +264,7 @@ $(function(){
         $segmen.empty();
         $serpo.empty().append('<option value="">-- Pilih Serpo --</option>');
 
-        // pastikan visibilitas sesuai kategori yang (belum) dipilih
         updateVisibilityByCategory();
-
         $('#modalUser').modal('show');
     });
 
@@ -315,23 +286,14 @@ $(function(){
 
         const regionId = $(this).data('region') || '';
         const serpoId  = $(this).data('serpo')  || '';
-        let segmenIds  = $(this).attr('data-segmen');
-
-        try { segmenIds = JSON.parse(segmenIds || '[]'); } catch(e) { segmenIds = []; }
-
         $('#form_region').val(String(regionId));
-
-        // Tampilkan field-field sesuai kategori dulu
         updateVisibilityByCategory();
 
-        // Kalau kategori SERPO → preload serpo & segmen
         const katText = ($('#kategori_user_id option:selected').text()||'').toUpperCase();
         if (katText.includes('SERPO')) {
             loadSerpoByRegion(regionId, $serpo, serpoId)
-                .then(() => loadSegmenBySerpo(serpoId, $segmen, segmenIds))
-                .always(() => $('#modalUser').modal('show'));
+              .always(() => $('#modalUser').modal('show'));
         } else {
-            // ADMIN atau NOC tidak perlu preload serpo/segmen
             $('#modalUser').modal('show');
         }
     });

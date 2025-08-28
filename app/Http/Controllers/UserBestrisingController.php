@@ -43,7 +43,7 @@ class UserBestrisingController extends Controller
         ]);
     }
 
-    /** Helper untuk baca nama kategori dan normalkan */
+    /** Helper: ambil nama kategori uppercase */
     private function kategoriNameUpper($kategori_user_id): string
     {
         $kat = KategoriUser::findOrFail($kategori_user_id);
@@ -60,7 +60,7 @@ class UserBestrisingController extends Controller
             'kategori_user_id' => ['required','exists:kategoriuser,id_kategoriuser'],
         ];
 
-        // password rules
+        // Password rules
         if ($ignoreId) {
             $base['password'] = ['nullable','string','min:6','confirmed'];
         } else {
@@ -72,15 +72,11 @@ class UserBestrisingController extends Controller
         if (str_contains($katName, 'ADMIN')) {
             // tidak butuh region/serpo/segmen
         } elseif (str_contains($katName, 'SERPO')) {
-            $base['id_region']   = ['required','integer'];
-            $base['id_serpo']    = ['required','integer'];
-            $base['id_segmen']   = ['required','array','min:1'];
-            $base['id_segmen.*'] = ['integer','exists:segmens,id_segmen'];
+            $base['id_region'] = ['required','integer'];
+            $base['id_serpo']  = ['required','integer'];
+            // segmen auto oleh backend → tidak divalidasi dari request
         } elseif (str_contains($katName, 'NOC')) {
             $base['id_region'] = ['required','integer'];
-            // serpo & segmen tidak diwajibkan
-        } else {
-            // kategori lain (kalau ada) → default kosong (boleh lu sesuaikan)
         }
 
         return $request->validate($base);
@@ -96,10 +92,8 @@ class UserBestrisingController extends Controller
             $data['id_region'] = null;
             $data['id_serpo']  = null;
         } elseif (str_contains($katName, 'NOC')) {
-            // hanya region; serpo null
             $data['id_serpo']  = null;
         }
-        // untuk SERPO: id_region & id_serpo tetap ada
 
         $user = UserBestrising::create([
             'nik'              => $data['nik'],
@@ -111,11 +105,12 @@ class UserBestrisingController extends Controller
             'id_serpo'         => $data['id_serpo']  ?? null,
         ]);
 
-        // Handle segmen
+        // AUTO SYNC semua segmen berdasarkan Serpo untuk kategori SERPO
         if (str_contains($katName, 'SERPO')) {
-            $user->segmens()->sync($request->input('id_segmen', []));
+            $segmenIds = Segmen::where('id_serpo', $data['id_serpo'] ?? 0)->pluck('id_segmen')->all();
+            $user->segmens()->sync($segmenIds); // aman walau kosong
         } else {
-            $user->segmens()->sync([]); // kosongkan bila bukan kategori SERPO
+            $user->segmens()->sync([]); // kosongkan utk ADMIN/NOC
         }
 
         return response()->json(['success' => true, 'message' => 'User berhasil ditambahkan']);
@@ -147,14 +142,15 @@ class UserBestrisingController extends Controller
             $payload['id_serpo']  = $data['id_serpo']  ?? null;
         } elseif (str_contains($katName, 'NOC')) {
             $payload['id_region'] = $data['id_region'] ?? null;
-            $payload['id_serpo']  = null; // pastikan null
+            $payload['id_serpo']  = null;
         }
 
         $user->update($payload);
 
-        // Sync segmen sesuai kategori
+        // AUTO SYNC semua segmen by Serpo (SERPO saja)
         if (str_contains($katName, 'SERPO')) {
-            $user->segmens()->sync($request->input('id_segmen', []));
+            $segmenIds = Segmen::where('id_serpo', $payload['id_serpo'] ?? 0)->pluck('id_segmen')->all();
+            $user->segmens()->sync($segmenIds);
         } else {
             $user->segmens()->sync([]); // kosongkan utk ADMIN/NOC
         }
@@ -165,7 +161,7 @@ class UserBestrisingController extends Controller
     public function destroy($id)
     {
         $user = UserBestrising::findOrFail($id);
-        $user->segmens()->sync([]); // bersihkan pivot biar rapi
+        $user->segmens()->sync([]); // bersihkan pivot
         $user->delete();
 
         return response()->json(['success' => true, 'message' => 'User berhasil dihapus']);

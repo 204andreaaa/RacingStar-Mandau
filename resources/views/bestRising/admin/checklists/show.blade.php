@@ -1,35 +1,47 @@
 @extends('layouts.appBestRising')
 
 @section('main')
+@php
+  // fallback kalau controller belum nge-pass $items
+  $items = $items ?? ($checklist->items ?? collect());
+  $fmtMulai   = optional($checklist->started_at)->format('Y-m-d H:i:s') ?? '-';
+  $fmtSelesai = optional($checklist->submitted_at)->format('Y-m-d H:i:s') ?? '-';
+  $team       = $checklist->team ?? '-';
+  $userNama   = $checklist->user->nama ?? '-';
+  $namaRegion = $checklist->region->nama_region ?? '-';
+  $namaSerpo  = $checklist->serpo->nama_serpo ?? '-';
+  $namaSegmen = $checklist->segmen->nama_segmen ?? '-';
+  $status     = $checklist->status ?? '-';
+  $badge      = $status === 'completed' ? 'badge-success'
+              : ($status === 'pending' ? 'badge-warning' : 'badge-secondary');
+  $totalPoint = (int) ($checklist->total_point ?? 0);
+@endphp
+
 <div class="content-wrapper">
   <section class="content-header d-flex align-items-start align-items-md-center justify-content-between flex-column flex-md-row gap-2">
     <div class="w-100">
-      <h1 class="mb-1">Detail Checklist #{{ $checklist->id }}</h1>
-      <div class="text-muted meta-inline small">
-        <div>Team: <strong>{{ $meta->team }}</strong></div>
-        <div class="mx-1 d-none d-md-inline">•</div>
-        <div>User: <strong>{{ $meta->user_nama }}</strong></div>
-        <div class="mx-1 d-none d-md-inline">•</div>
-        <div>Lokasi: <strong>{{ $meta->nama_region }} / {{ $meta->nama_serpo }} / {{ $meta->nama_segmen }}</strong></div>
-        <div class="mx-1 d-none d-md-inline">•</div>
-        <div>Mulai: {{ $meta->started_at }}</div>
-        <div class="mx-1 d-none d-md-inline">•</div>
-        <div>Selesai: {{ $meta->submitted_at ?? '-' }}</div>
-        <div class="mx-1 d-none d-md-inline">•</div>
-        <div>
-          Status:
-          <span class="badge {{ $meta->status=='completed' ? 'badge-success' : 'badge-secondary' }}">
-            {{ $meta->status }}
-          </span>
+      <h1 class="mb-3">Detail Activity #{{ $checklist->id }}</h1>
+
+      <div class="card mb-3">
+        <div class="card-body small text-muted">
+          <div class="mb-2">Team        : <strong>{{ $team }}</strong></div>
+          <div class="mb-2">User        : <strong>{{ $userNama }}</strong></div>
+          <div class="mb-2">Lokasi      : <strong>{{ $namaRegion }} / {{ $namaSerpo }} / {{ $namaSegmen }}</strong></div>
+          <div class="mb-2">Mulai       : {{ $fmtMulai }}</div>
+          <div class="mb-2">Selesai     : {{ $fmtSelesai }}</div>
+          <div class="mb-2">
+            Status      : 
+            <span class="badge {{ $badge }}">{{ ucfirst($status) }}</span>
+          </div>
+          <div>Total Star  : <strong>{{ $totalPoint }}</strong></div>
         </div>
-        <div class="mx-1 d-none d-md-inline">•</div>
-        <div>Total Star: <strong>{{ $meta->total_point }}</strong></div>
       </div>
+      
+          <div class="mt-1 mt-md-0 w-100 w-md-auto text-md-end">
+            <a href="{{ route('admin.checklists.index') }}" class="btn btn-primary w-100 w-md-auto">← Kembali</a>
+          </div>
     </div>
 
-    <div class="mt-1 mt-md-0 w-100 w-md-auto text-md-end">
-      <a href="{{ route('admin.checklists.index') }}" class="btn btn-light w-100 w-md-auto">← Kembali</a>
-    </div>
   </section>
 
   <div class="card">
@@ -63,16 +75,19 @@
             <tbody>
               @forelse($items as $it)
                 <tr>
-                  <td class="text-nowrap">{{ $it->submitted_at }}</td>
+                  <td class="text-nowrap">{{ optional($it->submitted_at)->format('Y-m-d H:i:s') ?? '-' }}</td>
                   <td>{{ $it->activity->name ?? '-' }}</td>
                   <td>
-                    <span class="badge {{ $it->status === 'done' ? 'badge-success' : 'badge-secondary' }}">
-                      {{ ucfirst($it->status) }}
-                    </span>
+                    @php
+                      $st = $it->status ?? '-';
+                      $bd = $st === 'done' ? 'badge-success'
+                           : ($st === 'pending' ? 'badge-warning' : 'badge-secondary');
+                    @endphp
+                    <span class="badge {{ $bd }}">{{ ucfirst($st) }}</span>
                   </td>
-                  <td class="text-end">{{ $it->point_earned }}</td>
+                  <td class="text-end">{{ (int)($it->point_earned ?? 0) }}</td>
                   <td>
-                    @if($it->before_photo)
+                    @if(!empty($it->before_photo))
                       <a href="{{ asset('storage/'.$it->before_photo) }}" target="_blank" title="Lihat gambar">
                         <img
                           src="{{ asset('storage/'.$it->before_photo) }}"
@@ -84,7 +99,7 @@
                     @endif
                   </td>
                   <td>
-                    @if($it->after_photo)
+                    @if(!empty($it->after_photo))
                       <a href="{{ asset('storage/'.$it->after_photo) }}" target="_blank" title="Lihat gambar">
                         <img
                           src="{{ asset('storage/'.$it->after_photo) }}"
@@ -95,7 +110,7 @@
                       <span class="text-muted">-</span>
                     @endif
                   </td>
-                  <td class="note-pre">{{ $it->note }}</td>
+                  <td class="note-pre">{{ $it->note ?? '-' }}</td>
                 </tr>
               @empty
                 <tr>
@@ -125,22 +140,25 @@
             <div class="d-flex justify-content-between align-items-start gap-2">
               <div>
                 <div class="font-weight-bold">{{ $it->activity->name ?? '-' }}</div>
-                <div class="small text-muted">{{ $it->submitted_at }}</div>
+                <div class="small text-muted">{{ optional($it->submitted_at)->format('Y-m-d H:i:s') ?? '-' }}</div>
               </div>
-              <span class="badge {{ $it->status === 'done' ? 'badge-success' : 'badge-secondary' }}">
-                {{ ucfirst($it->status) }}
-              </span>
+              @php
+                $st = $it->status ?? '-';
+                $bd = $st === 'done' ? 'badge-success'
+                     : ($st === 'pending' ? 'badge-warning' : 'badge-secondary');
+              @endphp
+              <span class="badge {{ $bd }}">{{ ucfirst($st) }}</span>
             </div>
 
             <div class="d-flex justify-content-between mt-2 small">
               <div class="text-muted">Star</div>
-              <div class="font-weight-bold">{{ $it->point_earned }}</div>
+              <div class="font-weight-bold">{{ (int)($it->point_earned ?? 0) }}</div>
             </div>
 
             <div class="row g-2 mt-2">
               <div class="col-6">
                 <div class="small text-muted mb-1">Before</div>
-                @if($it->before_photo)
+                @if(!empty($it->before_photo))
                   <a href="{{ asset('storage/'.$it->before_photo) }}" target="_blank" class="d-block">
                     <img
                       src="{{ asset('storage/'.$it->before_photo) }}"
@@ -153,7 +171,7 @@
               </div>
               <div class="col-6">
                 <div class="small text-muted mb-1">After</div>
-                @if($it->after_photo)
+                @if(!empty($it->after_photo))
                   <a href="{{ asset('storage/'.$it->after_photo) }}" target="_blank" class="d-block">
                     <img
                       src="{{ asset('storage/'.$it->after_photo) }}"
@@ -166,7 +184,7 @@
               </div>
             </div>
 
-            @if($it->note)
+            @if(!empty($it->note))
               <div class="mt-2 small note-pre">{{ $it->note }}</div>
             @endif
           </div>
@@ -185,7 +203,6 @@
   </div>
 </div>
 
-@push('styles')
   <style>
     /* Pastikan di layout ada: <meta name="viewport" content="width=device-width, initial-scale=1"> */
     .meta-inline { display:flex; flex-wrap:wrap; gap:.25rem .5rem; }
@@ -205,5 +222,4 @@
     /* Soft shadow di mobile card */
     @media (max-width: 767.98px){ .shadow-sm-sm { box-shadow: 0 .125rem .25rem rgba(0,0,0,.075); } }
   </style>
-@endpush
 @endsection

@@ -4,7 +4,7 @@
 <div class="content-wrapper">
   <section class="content-header d-flex align-items-start align-items-md-center justify-content-between flex-column flex-md-row gap-2">
     <div class="w-100">
-      <h1 class="mb-1">Detail Checklist #{{ $checklist->id }}</h1>
+      <h1 class="mb-1">Detail Activity #{{ $checklist->id }}</h1>
       <div class="text-muted meta-inline small">
         <div>Team: <strong>{{ $meta->team }}</strong></div>
         <div class="mx-1 d-none d-md-inline">•</div>

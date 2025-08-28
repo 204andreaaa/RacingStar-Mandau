@@ -120,7 +120,7 @@
         <nav class="mt-2">
             <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
               <li class="nav-item">
-                    <a href="indexAdmin" class="nav-link">
+                    <a href="{{ route('admin.home') }}" class="nav-link">
                         <i class="nav-icon fas fa-home"></i>
                         <p> HOME </p>
                     </a>
@@ -163,14 +163,21 @@
                 <li class="nav-item">
                     <a href="{{ route('admin.aktifitas.index') }}" class="nav-link">
                         <i class="nav-icon fas fa-tasks"></i>
-                        <p> Activity </p>
+                        <p>Master Activity </p>
                     </a>
                 </li>
 
                 <li class="nav-item">
                     <a href="{{ route('admin.checklists.index') }}" class="nav-link">
                         <i class="nav-icon fas fa-check-square"></i>
-                        <p> Checklist </p>
+                        <p> Activity Result </p>
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a href="{{ route('admin.checklists.allresult') }}" class="nav-link">
+                        <i class="nav-icon fas fa-check-square"></i>
+                        <p> All Activity </p>
                     </a>
                 </li>
             </ul>

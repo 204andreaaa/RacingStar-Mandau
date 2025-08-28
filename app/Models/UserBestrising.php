@@ -21,7 +21,6 @@ class UserBestrising extends Authenticatable
         'kategori_user_id',
         'id_region',
         'id_serpo',
-        // ❌ tidak ada id_segmen di fillable lagi
     ];
 
     protected $hidden = ['password'];
@@ -40,15 +39,14 @@ class UserBestrising extends Authenticatable
     {
         return $this->belongsTo(Serpo::class, 'id_serpo', 'id_serpo');
     }
-    
+
     public function segmens()
     {
-        // eksplisitkan pivot table + key karena nama tabel & PK custom
         return $this->belongsToMany(
             Segmen::class,
-            'segmen_user_bestrising',
-            'id_userBestrising',
-            'id_segmen'
+            'segmen_user_bestrising', // pivot
+            'id_userBestrising',      // FK ke user
+            'id_segmen'               // FK ke segmen
         )->withTimestamps();
     }
 
