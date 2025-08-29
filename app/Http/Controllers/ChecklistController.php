@@ -41,7 +41,6 @@ public function start(Request $req)
       // Kalau SERPO, wajib serpo + segmen
       if ($kat === 'SERPO') {
           $rules['id_serpo']  = ['required','integer'];
-          $rules['id_segmen'] = ['required','integer'];
       }
 
       // NOC/ADMIN: serpo & segmen tidak diwajibkan
@@ -49,14 +48,12 @@ public function start(Request $req)
 
       // Normalisasi field yg tidak dipakai
       $idSerpo  = $kat === 'SERPO' ? ($data['id_serpo']  ?? null) : null;
-      $idSegmen = $kat === 'SERPO' ? ($data['id_segmen'] ?? null) : null;
 
       $checklist = Checklist::create([
           'user_id'   => $data['user_id'],
           'team'      => $data['team'],
           'id_region' => $data['id_region'],
           'id_serpo'  => $idSerpo,   // null utk NOC/ADMIN
-          'id_segmen' => $idSegmen,  // null utk NOC/ADMIN
           'started_at'=> now(),
           'status'    => 'pending',
       ]);
@@ -193,6 +190,17 @@ public function start(Request $req)
       ->orderBy('nama_segmen')
       ->get(['id_segmen as id','nama_segmen as text']);
   }
+
+    public function segmenByRegion($id_serpo)
+    {
+        $regionId = Serpo::where('id_serpo', $id_serpo)->value('id_region');
+        $items = Segmen::whereHas('serpo', fn($q) => $q->where('id_region', $regionId))
+            ->orderBy('nama_segmen')
+            ->get(['id_segmen as id','nama_segmen as text']);
+
+        return response()->json($items);
+
+    }
 
     private function currentUserId(): ?int
     {

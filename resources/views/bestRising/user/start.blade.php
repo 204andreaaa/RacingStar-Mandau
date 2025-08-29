@@ -8,7 +8,6 @@
   $sessId       = $getUserSession['id']        ?? null;
   $sessRegion   = $getUserSession['id_region'] ?? null;
   $sessSerpo    = $getUserSession['id_serpo']  ?? null;
-  $sessSegmen   = $getUserSession['id_segmen'] ?? null;
   $sessKatNama  = strtoupper(trim($getUserSession['kategori_nama'] ?? '')); // <-- penting
   $isNOC        = $sessKatNama === 'NOC';
   $isSERPO      = $sessKatNama === 'SERPO';
@@ -51,7 +50,6 @@
           @if($sessId)     <input type="hidden" name="user_id"   value="{{ $sessId }}"> @endif
           @if($sessRegion) <input type="hidden" name="id_region" value="{{ $sessRegion }}"> @endif
           @if($isSERPO && $sessSerpo)  <input type="hidden" name="id_serpo"  value="{{ $sessSerpo }}"> @endif
-          @if($isSERPO && $sessSegmen) <input type="hidden" name="id_segmen" value="{{ $sessSegmen }}"> @endif
         @endif
 
         {{-- SECTION: IDENTITAS --}}
@@ -97,15 +95,6 @@
             </select>
             <small class="text-muted">Daftar serpo mengikuti region yang dipilih.</small>
           </div>
-
-          <div class="col-md-6">
-            <label class="form-label">Segmen</label>
-            <select name="id_segmen" id="id_segmen" class="form-control br-control" {{ $sessSegmen ? 'disabled' : '' }} required>
-              <option value="">— pilih segmen —</option>
-              {{-- diisi via JS / preload session --}}
-            </select>
-            <small class="text-muted">Pilih segmen tempat pekerjaan dilakukan.</small>
-          </div>
           @endif
         </div>
 
@@ -147,11 +136,9 @@
 <script>
 $(function () {
   const routeSerpoByRegion = rid => "{{ route('api.serpo.byRegion', ':rid') }}".replace(':rid', rid);
-  const routeSegmenBySerpo = sid => "{{ route('api.segmen.bySerpo', ':sid') }}".replace(':sid', sid);
 
   const sess_region = @json($sessRegion ?? '');
   const sess_serpo  = @json($sessSerpo  ?? '');
-  const sess_segmen = @json($sessSegmen ?? '');
   const sess_kat    = @json($sessKatNama ?? '');
 
   function resetSelect($el, placeholder) {
@@ -167,7 +154,6 @@ $(function () {
   $('#id_region').on('change', function () {
     const rid = $(this).val();
     resetSelect($('#id_serpo'), '— pilih serpo —');
-    resetSelect($('#id_segmen'), '— pilih segmen —');
     if (!rid) return;
 
     $.get(routeSerpoByRegion(rid))
@@ -175,21 +161,9 @@ $(function () {
       .fail(() => { alert('Gagal memuat data Serpo.'); });
   });
 
-  // Event serpo → load segmen
-  $('#id_serpo').on('change', function () {
-    const sid = $(this).val();
-    resetSelect($('#id_segmen'), '— pilih segmen —');
-    if (!sid) return;
-
-    $.get(routeSegmenBySerpo(sid))
-      .done(rows => { rows.forEach(x => $('#id_segmen').append(new Option(x.text, x.id))); })
-      .fail(() => { alert('Gagal memuat data Segmen.'); });
-  });
-
   // PRELOAD via session (khusus SERPO)
   if (sess_region) {
     resetSelect($('#id_serpo'), '— pilih serpo —');
-    resetSelect($('#id_segmen'), '— pilih segmen —');
 
     $.get(routeSerpoByRegion(sess_region))
       .done(rows => {
@@ -197,16 +171,6 @@ $(function () {
           const opt = new Option(x.text, x.id, false, (x.id == sess_serpo));
           $('#id_serpo').append(opt);
         });
-        if (sess_serpo) {
-          $.get(routeSegmenBySerpo(sess_serpo))
-            .done(rows2 => {
-              rows2.forEach(y => {
-                const opt2 = new Option(y.text, y.id, false, (y.id == sess_segmen));
-                $('#id_segmen').append(opt2);
-              });
-            })
-            .fail(() => { alert('Gagal memuat data Segmen (preload).'); });
-        }
       })
       .fail(() => { alert('Gagal memuat data Serpo (preload).'); });
   }

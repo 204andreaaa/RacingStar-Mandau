@@ -76,7 +76,7 @@
               @forelse($items as $it)
                 <tr>
                   <td class="text-nowrap">{{ optional($it->submitted_at)->format('Y-m-d H:i:s') ?? '-' }}</td>
-                  <td>{{ $it->activity->name ?? '-' }}</td>
+                  <td>{{ $it->activity->name ?? '-' }} <br><br>Dari Segmen :  ({{ $it->segmen->nama_segmen ?? '-' }})</td>
                   <td>
                     @php
                       $st = $it->status ?? '-';

@@ -54,6 +54,7 @@ Route::middleware('manual.auth')->group(function () {
     // API dropdown berantai (dipakai di form teknisi)
     Route::get('/api/serpo/by-region/{id_region}', [ChecklistController::class,'serpoByRegion'])->name('api.serpo.byRegion');
     Route::get('/api/segmen/by-serpo/{id_serpo}',   [ChecklistController::class,'segmenBySerpo'])->name('api.segmen.bySerpo');
+    Route::get('/api/segmen/by-region/{id_serpo}',   [ChecklistController::class,'segmenByRegion'])->name('api.segmen.byRegion');
 
     // ---------------------------
     // ADMIN AREA

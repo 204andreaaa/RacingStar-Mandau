@@ -16,18 +16,12 @@ class AdminChecklistController extends Controller
     public function allresult(Request $request)
     {
         if ($request->ajax()) {
-            // Subquery: kumpulin daftar segmen per user (many-to-many pivot)
-            $segmenSub = DB::table('segmen_user_bestrising as p')
-                ->join('segmens as sg', 'sg.id_segmen', '=', 'p.id_segmen')
-                ->selectRaw('p.id_userBestrising as uid, GROUP_CONCAT(sg.nama_segmen ORDER BY sg.nama_segmen SEPARATOR ", ") as segmen_list')
-                ->groupBy('p.id_userBestrising');
-
             $q = DB::table('activity_results as ar')
                 ->leftJoin('user_bestrising as u', 'u.id_userBestrising', '=', 'ar.user_id')
                 ->leftJoin('regions as r', 'r.id_region', '=', 'u.id_region')
                 ->leftJoin('serpos as sp', 'sp.id_serpo', '=', 'u.id_serpo')
+                ->leftJoin('segmens as sg', 'sg.id_segmen', '=', 'ar.id_segmen')
                 ->leftJoin('activities as act', 'act.id', '=', 'ar.activity_id') // schema kamu: id & name
-                ->leftJoinSub($segmenSub, 'ugs', 'ugs.uid', '=', 'u.id_userBestrising')
                 ->select([
                     // hidden di UI
                     'ar.id',
@@ -47,7 +41,7 @@ class AdminChecklistController extends Controller
                     DB::raw('act.name as activity_nama'),
                     DB::raw('COALESCE(r.nama_region, "-") as region_nama'),
                     DB::raw('COALESCE(sp.nama_serpo, "-") as serpo_nama'),
-                    DB::raw('COALESCE(ugs.segmen_list, "-") as segmen_list'),
+                    DB::raw('COALESCE(sg.nama_segmen, "-") as segmen_nama'),
                 ]);
 
             // ================= FILTERS =================

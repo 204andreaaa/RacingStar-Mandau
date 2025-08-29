@@ -180,7 +180,7 @@ $(function(){
         { data:'serpo_nama',    name:'sp.nama_serpo', defaultContent:'-' },
 
         // segmen_list dari subquery → non-searchable (atau bikin filterColumn sendiri kalau mau)
-        { data:'segmen_list',   searchable:false,     defaultContent:'-' },
+        { data:'segmen_nama',   searchable:false,     defaultContent:'-' },
 
         { data:'status',        name:'ar.status',     defaultContent:'-' },
         { data:'before_photo',  orderable:false, searchable:false, defaultContent:'-' },

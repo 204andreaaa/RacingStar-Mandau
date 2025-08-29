@@ -10,6 +10,7 @@ class ActivityResult extends Model
         'checklist_id',      // <— TAMBAHKAN INI
         'user_id',
         'activity_id',
+        'id_segmen',
         'submitted_at',
         'status',
         'before_photo',
@@ -33,5 +34,7 @@ class ActivityResult extends Model
         return $this->belongsTo(UserBestrising::class, 'user_id', 'id_userBestrising');
     }
 
-
+    public function segmen() {
+        return $this->belongsTo(Segmen::class, 'id_segmen');
+    }
 }

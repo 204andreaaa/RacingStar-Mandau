@@ -6,12 +6,22 @@ use Illuminate\Database\Eloquent\Model;
 
 class Activity extends Model
 {
-    protected $fillable = ['team_id','name','description','point','is_active'];
+    protected $fillable = [
+        'team_id',
+        'name',
+        'description',
+        'point',
+        'is_active',
+        'is_checked_segmen',
+        'limit_period', // ⟵ TAMBAH
+        'limit_quota',  // ⟵ TAMBAH
+    ];
 
-    // opsional, tapi bagus buat konsistensi tipe data
     protected $casts = [
-        'team_id'   => 'integer',
-        'point'     => 'integer',
-        'is_active' => 'boolean',
+        'team_id'      => 'integer',
+        'point'        => 'integer',
+        'is_active'    => 'boolean',
+        'is_checked_segmen'    => 'boolean',
+        'limit_quota'  => 'integer',
     ];
 }

@@ -7,28 +7,31 @@
   <div class="card">
     <div class="card-header d-flex align-items-center">
       <h3 class="mb-0">Data Activity</h3>
-      <button class="btn btn-primary ms-auto ml-auto" id="btnAdd">Tambah Activity</button>
+      <div class="ms-auto ml-auto d-flex gap-2">
+        <select id="f_team" class="form-control form-control-sm" style="min-width:140px">
+          <option value="">Semua Team</option>
+          @foreach($teams as $id => $nm)
+            <option value="{{ $id }}">{{ $nm }}</option>
+          @endforeach
+        </select>
+        <button class="btn btn-primary" id="btnAdd">Tambah Activity</button>
+      </div>
     </div>
 
     <div class="card-body">
       <table id="table-aktifitas" class="table table-bordered">
         <thead>
           <tr>
-            <th>No</th><th>Team</th><th>Nama</th><th>Star</th><th>Status</th><th>Aksi</th>
+            <th style="width:60px">#</th>
+            <th>Team</th>
+            <th>Nama</th>
+            <th class="text-end">Point</th>
+            <th>Status</th>
+            <th>Segmen</th>
+            <th style="width:160px">Aksi</th>
           </tr>
         </thead>
       </table>
-
-      {{-- FILTER TEAM (akan dipindah ke "Show entries" via JS) --}}
-      <div id="dtTeamFilter" class="d-none dt-team-filter">
-        <label class="mb-0 mr-2 font-weight-bold">Team:</label>
-        <select id="f_team" class="form-control form-control-sm d-inline-block" style="width:auto;min-width:130px">
-          <option value="">Semua</option>
-          @foreach($teams as $id => $nm)
-            <option value="{{ $id }}">{{ $nm }}</option>
-          @endforeach
-        </select>
-      </div>
     </div>
   </div>
 </div>
@@ -36,108 +39,171 @@
 {{-- Modal --}}
 <div class="modal fade" id="modalAktifitas" tabindex="-1">
   <div class="modal-dialog">
-    <form id="formAktifitas">@csrf
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="modalTitle">Tambah Activity</h5>
-          <button type="button" class="close" data-dismiss="modal">&times;</button>
-        </div>
-        <div class="modal-body">
-          <input type="hidden" id="id_row">
+    <form id="formAktifitas" class="modal-content">
+      @csrf
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">Tambah Activity</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="id_row" name="id_row">
 
-          <div class="form-group">
-            <label>Team</label>
-            <select name="team_id" id="team_id" class="form-control" required>
-              @foreach($teams as $id => $nm)
-                <option value="{{ $id }}">{{ $nm }}</option>
-              @endforeach
-            </select>
-          </div>
+        <div class="form-group mb-2">
+          <label>Team</label>
+          <select name="team_id" id="team_id" class="form-control select2" data-placeholder="-- Pilih Team --" required>
+            @foreach($teams as $id => $nm)
+              <option value=""></option>
+              <option value="{{ $id }}">{{ $nm }}</option>
+            @endforeach
+          </select>
+        </div>
 
-          <div class="form-group">
-            <label>Nama</label>
-            <input type="text" name="name" id="name" class="form-control" required>
+        <div class="form-group mb-2">
+          <label>Nama</label>
+          <input type="text" name="name" id="name" class="form-control" required>
+        </div>
+
+        <div class="form-group mb-2">
+          <label>Deskripsi</label>
+          <textarea name="description" id="description" class="form-control" rows="2" placeholder="Opsional"></textarea>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group mb-2">
+              <label>Point</label>
+              <input type="number" name="point" id="point" class="form-control" min="0" value="0" required>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Deskripsi</label>
-            <textarea name="description" id="description" class="form-control" rows="3"></textarea>
+          <div class="col-md-6">
+            <div class="form-group mb-2">
+              <label>Status Aktif</label>
+              <select name="is_active" id="is_active" class="form-control select2" data-placeholder="-- Pilih Status --" required>
+                @foreach (Dropdown::activeStatusOpt() as $key => $item)
+                  <option value=""></option>
+                  <option value="{{ $key }}">{{ $item }}</option>
+                @endforeach
+              </select>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Star</label>
-            <input type="number" name="point" id="point" class="form-control" min="0" value="0" required>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="1" checked>
-            <label class="form-check-label" for="is_active">Aktif</label>
+          <div class="col-md-6">
+            <div class="form-group mb-2">
+              <label>Status Segmen</label>
+              <select name="is_checked_segmen" id="is_checked_segmen" class="form-control select2" data-placeholder="-- Pilih Status --" required>
+                @foreach (Dropdown::requiredStatusOpt() as $key => $item)
+                  <option value=""></option>
+                  <option value="{{ $key }}">{{ $item }}</option>
+                @endforeach
+              </select>
+            </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-          <button type="submit" class="btn btn-primary" id="btnSave">Simpan</button>
+
+        <hr class="my-2">
+
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group mb-2">
+              <label>Limit Periode</label>
+              <select name="limit_period" id="limit_period" class="form-control" required>
+                <option value="none">Tidak dibatasi</option>
+                <option value="daily">Harian</option>
+                <option value="weekly">Mingguan</option>
+                <option value="monthly">Bulanan</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-group mb-2">
+              <label>Kuota / Periode</label>
+              <input type="number" name="limit_quota" id="limit_quota" class="form-control" min="1" value="1" required>
+              <small class="text-muted">Contoh: 1 = maksimal 1x tiap periode.</small>
+            </div>
+          </div>
         </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-dismiss="modal">Batal</button>
+        <button type="submit" id="btnSave" class="btn btn-primary">Simpan</button>
       </div>
     </form>
   </div>
 </div>
-
-<meta name="csrf-token" content="{{ csrf_token() }}">
-
-<style>
-  /* rapihin area length biar muat filter */
-  #table-aktifitas_wrapper .dataTables_length{
-    display:flex; align-items:center; gap:.75rem;
-  }
-  .dt-team-filter{ display:flex; align-items:center; gap:.5rem; margin-left:.75rem; }
-</style>
-
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(function(){
+  // Init ulang setiap modal dibuka
+  $('#modalAktifitas').on('shown.bs.modal', function () {
+    $(this).find('select.select2').each(function () {
+      // Cek ini BELUM di-init? (indikator: belum punya class 'select2-hidden-accessible')
+      if (!$(this).hasClass('select2-hidden-accessible')) {
+        $(this).select2({
+          dropdownParent: $('#modalAktifitas'),
+          width: '100%'
+        });
+      }
+    });
+  });
+
+  // Destroy hanya yang SUDAH di-init saat modal ditutup
+  $('#modalAktifitas').on('hidden.bs.modal', function () {
+    const $form = $('#formAktifitas');
+
+    // Penting: destroy dulu, baru reset form (biar DOM Select2 tidak hilang sebelum destroy)
+    $(this).find('select.select2').each(function () {
+      if ($(this).hasClass('select2-hidden-accessible')) {
+        $(this).select2('destroy'); // aman karena sudah dicek
+      }
+    });
+
+    // Baru reset form kalau perlu
+    if ($form.length && $form[0]) $form[0].reset();
+  });
+  
+  // CSRF untuk semua AJAX
   $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
 
   const ROUTES = {
     index  : "{{ route('admin.aktifitas.index') }}",
     store  : "{{ route('admin.aktifitas.store') }}",
-    update : "{{ route('admin.aktifitas.update', ':id') }}",
-    destroy: "{{ route('admin.aktifitas.destroy', ':id') }}",
+    update : "{{ route('admin.aktifitas.update', ['activity' => '__ID__']) }}",
+    destroy: "{{ route('admin.aktifitas.destroy', ['activity' => '__ID__']) }}", // ← param harus 'activity'
   };
-  const urlUpdate  = id => ROUTES.update.replace(':id', id);
-  const urlDestroy = id => ROUTES.destroy.replace(':id', id);
+  const urlUpdate  = id => ROUTES.update.replace('__ID__', encodeURIComponent(id));
+  const urlDestroy = id => ROUTES.destroy.replace('__ID__', encodeURIComponent(id));
 
   const table = $('#table-aktifitas').DataTable({
     processing:true, serverSide:true,
     ajax:{
       url: ROUTES.index,
-      data: d => { d.team = $('#f_team').val(); }
+      data: function(d){ d.team = $('#f_team').val(); }
     },
+    order:[[2,'asc']],
     columns: [
       {data:'DT_RowIndex', orderable:false, searchable:false},
       {data:'team', name:'team'},
       {data:'name', name:'name'},
       {data:'point', className:'text-end'},
       {data:'status', orderable:false, searchable:false},
+      {data:'is_checked_segmen', orderable:false, searchable:false},
       {data:'action', orderable:false, searchable:false},
     ]
   });
 
-  // Pindahkan filter ke sebelah "Show entries"
-  table.on('init.dt', function(){
-    $('#dtTeamFilter')
-      .appendTo('#table-aktifitas_wrapper .dataTables_length')
-      .removeClass('d-none');
-  });
-
-  // Apply filter
-  $(document).on('change', '#f_team', function(){
-    table.ajax.reload();
-  });
+  $('#f_team').on('change', function(){ table.ajax.reload(); });
 
   // Add
   $('#btnAdd').on('click', function(){
     $('#modalTitle').text('Tambah Activity');
     $('#formAktifitas')[0].reset();
     $('#id_row').val('');
-    $('#is_active').prop('checked', true);
-    const tf = $('#f_team').val(); if(tf) $('#team_id').val(tf); // default team = filter aktif
+    $('#limit_period').val('none');
+    $('#limit_quota').val(1);
+    const tf = $('#f_team').val(); if(tf) $('#team_id').val(tf);
     $('#modalAktifitas').modal('show');
   });
 
@@ -150,24 +216,29 @@ $(function(){
     $('#name').val($(this).data('name'));
     $('#description').val($(this).data('desc'));
     $('#point').val($(this).data('point'));
-    $('#is_active').prop('checked', +$(this).data('active') === 1);
+    $('#is_active').val(String($(this).data('active'))).trigger('change');
+    $('#is_checked_segmen').val(String($(this).data('is_checked_segmen'))).trigger('change');
+    $('#limit_period').val($(this).data('limit_period') || 'none');
+    $('#limit_quota').val($(this).data('limit_quota') || 1);
     $('#modalAktifitas').modal('show');
   });
 
-  // Submit
+  // Submit create/update
   $('#formAktifitas').on('submit', function(e){
     e.preventDefault();
     const id  = $('#id_row').val();
-    let data  = $(this).serialize();
-    if(!$('#is_active').is(':checked')) data += '&is_active=0';
-
+    const body = $(this).serialize();
     const url  = id ? urlUpdate(id) : ROUTES.store;
-    const body = id ? (data + '&_method=PUT') : data;
+    const type = 'POST';
+    const data = id ? (body + '&_method=PUT') : body;
 
     $('#btnSave').prop('disabled',true).text('Menyimpan...');
-    $.post(url, body)
-      .done(res => { $('#modalAktifitas').modal('hide'); table.ajax.reload(null,false);
-        Swal.fire({icon:'success', title:'OK', text:res.message}); })
+    $.ajax({ url, type, data })
+      .done(res => {
+        $('#modalAktifitas').modal('hide');
+        table.ajax.reload(null,false);
+        Swal.fire({icon:'success', title:'OK', text:res.message});
+      })
       .fail(xhr => {
         let msg = xhr.responseJSON?.message || 'Terjadi kesalahan';
         if(xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
@@ -176,18 +247,20 @@ $(function(){
       .always(() => $('#btnSave').prop('disabled',false).text('Simpan'));
   });
 
-  // Delete
+  // ====== DELETE FIX ======
   $(document).on('click','.btn-delete', function(){
     const id = $(this).data('id');
-    Swal.fire({title:'Yakin?', text:'Activity akan dihapus.', icon:'warning', showCancelButton:true})
+    const url = urlDestroy(id);
+    Swal.fire({icon:'warning', title:'Hapus data?', showCancelButton:true})
       .then(r => {
         if(!r.isConfirmed) return;
-        $.post(urlDestroy(id), {_method:'DELETE'})
-          .done(res => { table.ajax.reload(null,false); Swal.fire({icon:'success', title:'OK', text:res.message}); })
+        $.ajax({ url, type: 'DELETE' })
+          .done(res => { table.ajax.reload(null,false); Swal.fire({icon:'success', title:'OK', text: res.message || 'Berhasil dihapus'}); })
           .fail(xhr => {
-            let msg = xhr.responseJSON?.message || 'Gagal menghapus data';
-            if(xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
-            Swal.fire({icon:'error', title:'Gagal', text:msg});
+            let msg = 'Gagal menghapus data';
+            if (xhr.status === 419) msg = 'Sesi kedaluwarsa (CSRF). Refresh lalu ulangi.';
+            if (xhr.responseJSON?.message) msg = xhr.responseJSON.message;
+            Swal.fire({icon:'error', title:'Error', text: msg});
           });
       });
   });

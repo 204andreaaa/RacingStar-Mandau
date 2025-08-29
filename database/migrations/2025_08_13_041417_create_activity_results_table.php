@@ -17,6 +17,7 @@ return new class extends Migration
             // simple aja dulu: belum pakai foreign key constraint
             $table->unsignedBigInteger('user_id');      // id user pengisi
             $table->unsignedBigInteger('activity_id');  // id aktivitas
+            $table->unsignedBigInteger('id_segmen');  // id aktivitas
 
             $table->dateTime('submitted_at');           // waktu submit
             $table->string('status')->default('done');  // done/skipped (string dulu)
@@ -25,6 +26,7 @@ return new class extends Migration
             $table->unsignedInteger('point_earned')->default(0); // snapshot poin
             $table->text('note')->nullable();           // catatan opsional
 
+            $table->foreign('id_segmen')->references('id_segmen')->on('segmens')->onDelete('cascade');
             $table->timestamps();
         });
     }

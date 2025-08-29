@@ -18,6 +18,7 @@ return new class extends Migration
             $tabel->text('description')->nullable();
             $tabel->unsignedInteger('point')->default(0);
             $tabel->boolean('is_active')->default(true);
+            $tabel->boolean('is_checked_segmen')->default(false);
             $tabel->timestamps();
         });
     }
