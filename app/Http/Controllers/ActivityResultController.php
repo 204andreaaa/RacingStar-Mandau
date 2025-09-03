@@ -128,7 +128,7 @@ class ActivityResultController extends Controller
 
         // Jika masih di atas 1MB, kecilkan dimensi sedikit (maks 3x)
         $attempt = 0;
-        while (strlen((string) $img) > $maxBytes && $attempt < 3) {
+        while (strlen((string) $img) > $maxBytes && $attempt < 5) {
             $img->resize(
                 (int) round($img->width() * 0.9),
                 (int) round($img->height() * 0.9),
@@ -215,15 +215,49 @@ class ActivityResultController extends Controller
                     $hasBefore = $record->beforePhotos()->exists();
                     $hasAfter  = $record->afterPhotos()->exists();
 
+                    // DEBUG: log file yang invalid (gagal upload di PHP)
+                    if ($req->hasFile("before_photo.$aid")) {
+                        foreach ($req->file("before_photo.$aid") as $i => $f) {
+                            if ($f && !$f->isValid()) {
+                                \Log::error('before upload error', [
+                                    'aid'   => $aid,
+                                    'index' => $i,
+                                    'code'  => $f->getError(),
+                                    'msg'   => $f->getErrorMessage(),
+                                ]);
+                            }
+                        }
+                    }
+                    if ($req->hasFile("after_photo.$aid")) {
+                        foreach ($req->file("after_photo.$aid") as $i => $f) {
+                            if ($f && !$f->isValid()) {
+                                \Log::error('after upload error', [
+                                    'aid'   => $aid,
+                                    'index' => $i,
+                                    'code'  => $f->getError(),
+                                    'msg'   => $f->getErrorMessage(),
+                                ]);
+                            }
+                        }
+                    }
+
+                    // VALIDATION (naikkan batas per file → 12MB)
                     $rules = [
                         "before_photo.$aid"   => [$hasBefore ? 'nullable' : 'required','array','max:5'],
-                        "before_photo.$aid.*" => ['image','mimes:jpg,jpeg,png','max:5120'],
+                        "before_photo.$aid.*" => ['image','mimes:jpg,jpeg,png','max:12288'],
 
                         "after_photo.$aid"    => [$hasAfter ? 'nullable' : 'required','array','max:5'],
-                        "after_photo.$aid.*"  => ['image','mimes:jpg,jpeg,png','max:5120'],
+                        "after_photo.$aid.*"  => ['image','mimes:jpg,jpeg,png','max:12288'],
                     ];
 
-                    $req->validate($rules);
+                    $messages = [
+                        "before_photo.$aid.*.uploaded" => "Gagal upload foto (Before). Ukuran file terlalu besar atau melebihi batas server.",
+                        "after_photo.$aid.*.uploaded"  => "Gagal upload foto (After). Ukuran file terlalu besar atau melebihi batas server.",
+                        "before_photo.$aid.*.max"      => "Maksimal 12MB per foto (Before).",
+                        "after_photo.$aid.*.max"       => "Maksimal 12MB per foto (After).",
+                    ];
+
+                    $req->validate($rules, $messages);
                 }
 
                 // ==== BEFORE (replace total bila ada upload baru) ====

@@ -105,7 +105,7 @@
                     @if ($needPhoto)
                       {{-- ===== FOTO BEFORE ===== --}}
                       <div class="col-md-6">
-                        <label class="form-label fw-semibold">Foto Before <small class="text-muted">(maks 5)</small></label>
+                        <label class="form-label fw-semibold">Foto Before <small class="text-muted">(maks 5 • maks 12MB/foto)</small></label>
 
                         {{-- existing photos (server) --}}
                         <div class="d-flex gap-2 align-items-start flex-wrap mb-1">
@@ -140,7 +140,7 @@
 
                       {{-- ===== FOTO AFTER ===== --}}
                       <div class="col-md-6">
-                        <label class="form-label fw-semibold">Foto After <small class="text-muted">(maks 5)</small></label>
+                        <label class="form-label fw-semibold">Foto After <small class="text-muted">(maks 5 • maks 12MB/foto)</small></label>
 
                         {{-- existing photos (server) --}}
                         <div class="d-flex gap-2 align-items-start flex-wrap mb-1">
