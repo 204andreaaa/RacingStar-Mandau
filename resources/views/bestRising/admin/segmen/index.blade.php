@@ -4,10 +4,13 @@
 <div class="content-wrapper">
 
     <div class="card">
-        {{-- Header: sekarang cuma judul + tombol di kanan --}}
+        {{-- Header: judul + tombol di kanan --}}
         <div class="card-header d-flex align-items-center">
             <h3 class="mb-0">Data Segmen</h3>
-            <button class="btn btn-primary ms-auto ml-auto" id="btnAdd">Tambah Segmen</button>
+            <div class="ms-auto ml-auto d-flex gap-2">
+              <button class="btn btn-outline-primary mr-2" id="btnAddBulk">Tambah Banyak</button>
+              <button class="btn btn-primary" id="btnAdd">Tambah Segmen</button>
+            </div>
         </div>
 
         <div class="card-body">
@@ -44,7 +47,7 @@
     </div>
 </div>
 
-{{-- Modal --}}
+{{-- Modal single --}}
 <div class="modal fade" id="modalSegmen" tabindex="-1">
     <div class="modal-dialog">
         <form id="formSegmen">@csrf
@@ -85,6 +88,46 @@
     </div>
 </div>
 
+{{-- Modal bulk --}}
+<div class="modal fade" id="modalBulkSegmen" tabindex="-1">
+  <div class="modal-dialog">
+    <form id="formSegmenBulk">@csrf
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Tambah Banyak Segmen</h5>
+          <button type="button" class="close" data-dismiss="modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Region</label>
+            <select id="bulk_region" class="form-control" required>
+              <option value="">-- Pilih Region --</option>
+              @foreach($regions as $r)
+                <option value="{{ $r->id_region }}">{{ $r->nama_region }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Serpo</label>
+            <select id="bulk_serpo" name="id_serpo" class="form-control" required>
+              <option value="">-- Pilih Serpo --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Daftar Nama Segmen</label>
+            <textarea id="bulk_names" name="names" class="form-control" rows="8" placeholder="Satu nama segmen per baris"></textarea>
+            <small class="text-muted">Bisa paste langsung dari Excel (kolom nama).</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-primary" id="btnBulkSave">Import</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 <script>
@@ -106,6 +149,7 @@ $(function(){
     segmenStore   : "{{ route('admin.segmen.store') }}",
     segmenUpdate  : "{{ route('admin.segmen.update', ':id') }}",
     segmenDestroy : "{{ route('admin.segmen.destroy', ':id') }}",
+    segmenBulkStore : "{{ route('admin.segmen.bulkStore') }}",
   };
   const urlUpdate   = id => ROUTES.segmenUpdate.replace(':id', id);
   const urlDestroy  = id => ROUTES.segmenDestroy.replace(':id', id);
@@ -113,7 +157,6 @@ $(function(){
 
   function loadSerpoByRegion(regionId, $select, selected = '') {
       $select.prop('disabled', true).empty().append('<option value="">Memuat Serpo...</option>');
-      $('#form_segmen').prop('disabled', true).empty().append('<option value="">-- Pilih Segmen --</option>');
 
       if (!regionId) {
           $select.prop('disabled', false).empty().append('<option value="">-- Pilih Serpo --</option>');
@@ -122,9 +165,9 @@ $(function(){
 
       return $.get(urlByRegion(regionId))
           .then(items => {
-          $select.empty().append('<option value="">-- Pilih Serpo --</option>');
-          items.forEach(it => $select.append(new Option(it.text, it.id)));
-          if (selected) $select.val(String(selected));
+            $select.empty().append('<option value="">-- Pilih Serpo --</option>');
+            items.forEach(it => $select.append(new Option(it.text, it.id)));
+            if (selected) $select.val(String(selected));
           })
           .always(() => $select.prop('disabled', false));
   }
@@ -167,7 +210,7 @@ $(function(){
 
   $('#filter_serpo').on('change', ()=> table.ajax.reload(null,true));
 
-  // Add
+  // Add single
   $('#btnAdd').on('click', function(){
     $('#modalTitle').text('Tambah Segmen');
     $('#formSegmen')[0].reset();
@@ -176,7 +219,7 @@ $(function(){
     $('#modalSegmen').modal('show');
   });
 
-  // Edit
+  // Edit single
   $(document).on('click','.btn-edit', function(){
     $('#modalTitle').text('Edit Segmen');
     $('#formSegmen')[0].reset();
@@ -188,18 +231,17 @@ $(function(){
 
     $('#id_segmen').val(id);
     $('#nama_segmen').val(nama);
-
-    // set region dari filter aktif (kalau ada)
     $('#form_region').val(String(regionId));
+
     loadSerpoByRegion(regionId, $('#form_serpo'), serpoId)
       .then(() => $('#modalSegmen').modal('show'))
       .fail(() => {
-      console.error('Gagal preload Serpo/Segmen.');
-      $('#modalSegmen').modal('show');
+        console.error('Gagal preload Serpo.');
+        $('#modalSegmen').modal('show');
       });
   });
 
-  // Submit (create/update) - pakai SweetAlert
+  // Submit (create/update)
   $('#formSegmen').on('submit', function(e){
     e.preventDefault();
     const id   = $('#id_segmen').val();
@@ -224,7 +266,7 @@ $(function(){
       });
   });
 
-  // Delete + konfirmasi SweetAlert
+  // Delete + konfirmasi
   $(document).on('click','.btn-delete', function(){
     const id = $(this).data('id');
     swalConfirm('Segmen ini akan dihapus.')
@@ -243,11 +285,44 @@ $(function(){
     });
   });
 
-  // Change region di form -> reload serpo options (modal)
-  $('#form_region').on('change', function(){
-      loadSerpoByRegion(this.value, $('#form_serpo'));
+  // ===== BULK =====
+  // buka modal
+  $('#btnAddBulk').on('click', function(){
+    $('#formSegmenBulk')[0].reset();
+    $('#bulk_serpo').empty().append('<option value="">-- Pilih Serpo --</option>');
+    $('#modalBulkSegmen').modal('show');
   });
+
+  // region -> serpo (bulk)
+  $('#bulk_region').on('change', function(){
+    loadSerpoByRegion(this.value, $('#bulk_serpo'));
+  });
+
+  // submit bulk
+  $('#formSegmenBulk').on('submit', function(e){
+    e.preventDefault();
+    const data = $(this).serialize();
+    $('#btnBulkSave').prop('disabled', true).text('Mengimpor...');
+    $.post(ROUTES.segmenBulkStore, data)
+      .done(res => {
+        $('#modalBulkSegmen').modal('hide');
+        table.ajax.reload(null, false);
+        const msg = `Import selesai.
+- Total input: ${res.total_in}
+- Dibuat: ${res.created}
+- Duplikat/terlewat: ${res.skipped}`;
+        swalSuccess(msg);
+      })
+      .fail(xhr => {
+        let msg = xhr.responseJSON?.message || 'Gagal import';
+        if(xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
+        swalError(msg);
+      })
+      .always(() => {
+        $('#btnBulkSave').prop('disabled', false).text('Import');
+      });
+  });
+
 });
 </script>
-
 @endsection

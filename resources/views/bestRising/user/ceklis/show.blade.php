@@ -18,11 +18,20 @@
                 : ($status === 'pending' ? 'badge-warning' : 'badge-secondary');
   $totalPoint  = (int) ($checklist->total_point ?? 0);
 
-  // normalizer → selalu jadikan /storage/<path>
+  // NORMALIZER URL GAMBAR → selalu /storage/<path> (root-relative)
+  // Biar aman dibuka dari HP (nggak ketembak http://localhost).
   $toUrl = function ($p) {
-    $p = ltrim((string)$p, '/');
+    $p = (string) $p;
+    if ($p === '') return '';
+    // kalau sudah full URL, biarkan
+    if (preg_match('#^https?://#i', $p)) return $p;
+
+    // beresin prefix
+    $p = ltrim($p, '/');
     $p = preg_replace('#^(public|storage)/#', '', $p);
-    return Storage::disk('public')->url($p);
+
+    // hasil akhir root-relative (butuh storage:link aktif)
+    return '/storage/'.$p;
   };
 @endphp
 
@@ -85,7 +94,7 @@
                 @php
                   $beforeSet = collect($it->beforePhotos ?? [])->pluck('path')->all();
                   $afterSet  = collect($it->afterPhotos  ?? [])->pluck('path')->all();
-                  // fallback bila masih pakai field tunggal
+                  // fallback (kalau masih ada field tunggal)
                   if (empty($beforeSet) && $it->before_photo) $beforeSet = [$it->before_photo];
                   if (empty($afterSet)  && $it->after_photo)  $afterSet  = [$it->after_photo];
 
@@ -232,7 +241,7 @@
 <style>
   .gallery-grid{
     display:grid;
-    grid-template-columns: repeat(4, 1fr); /* muat 3–4 thumb sesuai lebar kolom */
+    grid-template-columns: repeat(4, 1fr);
     gap:.5rem;
   }
   .g-item{display:block; border:1px solid #e5e7eb; border-radius:.5rem; overflow:hidden;}

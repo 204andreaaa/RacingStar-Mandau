@@ -6,6 +6,9 @@ use App\Models\{UserBestrising, KategoriUser, Region, Segmen};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Yajra\DataTables\Facades\DataTables;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class UserBestrisingController extends Controller
 {
@@ -50,15 +53,46 @@ class UserBestrisingController extends Controller
         return mb_strtoupper(trim($kat->nama_kategoriuser ?? ''), 'UTF-8');
     }
 
+    /** Helper: generate NIK unik format RS-YYYYMMDD-xxxx (running number harian) */
+    private function generateNik(): string
+    {
+        $prefixDate = Carbon::now()->format('Ymd');
+        $prefix = "RS-{$prefixDate}-";
+
+        // Ambil urutan terakhir untuk hari ini
+        $lastNik = UserBestrising::where('nik', 'like', $prefix.'%')
+            ->orderByDesc('nik')
+            ->value('nik');
+
+        $next = 1;
+        if ($lastNik) {
+            // ambil 4 digit terakhir
+            $num = (int) substr($lastNik, -4);
+            $next = $num + 1;
+        }
+        return $prefix . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
+    }
+
+    /** Endpoint untuk minta NIK berikutnya (dipakai di form Add) */
+    public function nextNik()
+    {
+        return response()->json(['nik' => $this->generateNik()]);
+    }
+
     /** Validasi kondisional sesuai kategori */
     private function validateByCategory(Request $request, ?int $ignoreId = null): array
     {
         $base = [
-            'nik'              => ['required','max:50','unique:user_bestrising,nik'.($ignoreId ? ','.$ignoreId.',id_userBestrising' : '')],
+            // Catatan: nik TIDAK diwajibkan saat create (auto-generate di server)
             'nama'             => ['required','string','max:255'],
             'email'            => ['required','email','unique:user_bestrising,email'.($ignoreId ? ','.$ignoreId.',id_userBestrising' : '')],
             'kategori_user_id' => ['required','exists:kategoriuser,id_kategoriuser'],
         ];
+
+        // Saat UPDATE, izinkan kirim nik (readonly di UI, tapi tetap valid unik)
+        if ($ignoreId) {
+            $base['nik'] = ['required','max:50','unique:user_bestrising,nik,'.$ignoreId.',id_userBestrising'];
+        }
 
         // Password rules
         if ($ignoreId) {
@@ -95,8 +129,11 @@ class UserBestrisingController extends Controller
             $data['id_serpo']  = null;
         }
 
+        // Generate NIK di server (abaikan input nik dari client bila ada)
+        $nikBaru = $this->generateNik();
+
         $user = UserBestrising::create([
-            'nik'              => $data['nik'],
+            'nik'              => $nikBaru,
             'nama'             => $data['nama'],
             'email'            => $data['email'],
             'password'         => Hash::make($data['password']),
@@ -113,7 +150,7 @@ class UserBestrisingController extends Controller
             $user->segmens()->sync([]); // kosongkan utk ADMIN/NOC
         }
 
-        return response()->json(['success' => true, 'message' => 'User berhasil ditambahkan']);
+        return response()->json(['success' => true, 'message' => 'User berhasil ditambahkan', 'nik' => $nikBaru]);
     }
 
     public function update(Request $request, $id)
@@ -124,7 +161,7 @@ class UserBestrisingController extends Controller
         $user = UserBestrising::findOrFail($id);
 
         $payload = [
-            'nik'              => $data['nik'],
+            'nik'              => $data['nik'], // tetap simpan (readonly di UI)
             'nama'             => $data['nama'],
             'email'            => $data['email'],
             'kategori_user_id' => $data['kategori_user_id'],

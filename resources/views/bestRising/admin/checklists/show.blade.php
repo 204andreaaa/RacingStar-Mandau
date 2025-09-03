@@ -16,11 +16,14 @@
                 : ($status === 'pending' ? 'badge-warning' : 'badge-secondary');
   $totalPoint  = (int) ($checklist->total_point ?? 0);
 
-  // normalizer path
+  // URL normalizer → selalu /storage/<path> (root-relative) supaya aman di HP
   $toUrl = function ($p) {
-    $p = ltrim((string)$p, '/');
+    $p = (string) $p;
+    if ($p === '') return '';
+    if (preg_match('#^https?://#i', $p)) return $p; // sudah absolut, biarkan
+    $p = ltrim($p, '/');
     $p = preg_replace('#^(public|storage)/#', '', $p);
-    return Storage::disk('public')->url($p);
+    return '/storage/' . $p; // pastikan storage:link aktif
   };
 @endphp
 

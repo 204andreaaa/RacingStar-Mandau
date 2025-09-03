@@ -7,6 +7,7 @@ use App\Models\Serpo;
 use App\Models\Region;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
 
 class SegmenController extends Controller
@@ -20,7 +21,7 @@ class SegmenController extends Controller
             if ($request->filled('id_serpo'))   $query->where('id_serpo', $request->id_serpo);
             if ($request->filled('id_region'))  $query->whereHas('serpo', fn($q) => $q->where('id_region', $request->id_region));
 
-            // search
+            // search global
             if ($request->has('search') && !empty($request->input('search.value'))) {
                 $s = $request->input('search.value');
                 $query->where(function ($q) use ($s) {
@@ -35,14 +36,15 @@ class SegmenController extends Controller
                 ->addColumn('region', fn($row) => $row->serpo?->region?->nama_region ?? '-')
                 ->addColumn('serpo',  fn($row) => $row->serpo?->nama_serpo ?? '-')
                 ->addColumn('action', function ($row) {
+                    $rid = $row->serpo?->id_region ?? '';
                     return '
                         <button class="btn btn-warning btn-sm btn-edit"
-                            data-id="'.$row->id_segmen.'"
-                            data-nama="'.$row->nama_segmen.'"
-                            data-region="'.$row->serpo->id_region.'"
-                            data-serpo="'.$row->id_serpo.'">Edit</button>
+                            data-id="'.e($row->id_segmen).'"
+                            data-nama="'.e($row->nama_segmen).'"
+                            data-region="'.e($rid).'"
+                            data-serpo="'.e($row->id_serpo).'">Edit</button>
                         <button class="btn btn-danger btn-sm btn-delete"
-                            data-id="'.$row->id_segmen.'">Hapus</button>';
+                            data-id="'.e($row->id_segmen).'">Hapus</button>';
                 })
                 ->rawColumns(['action'])
                 ->make(true);
@@ -50,7 +52,7 @@ class SegmenController extends Controller
 
         return view('bestRising.admin.segmen.index', [
             'regions' => Region::orderBy('nama_region')->get(),
-            'serpos'  => Serpo::orderBy('nama_serpo')->get(), // boleh kosongin kalau mau full dependent dropdown
+            'serpos'  => Serpo::orderBy('nama_serpo')->get(),
         ]);
     }
 
@@ -94,7 +96,7 @@ class SegmenController extends Controller
         return response()->json(['success' => true, 'message' => 'Segmen berhasil dihapus']);
     }
 
-    // ==== Endpoint bantu untuk dependent dropdown ====
+    // ==== Endpoint bantu untuk dependent dropdown SEGMENT (kalau dibutuhkan) ====
     public function bySerpo($id_serpo)
     {
         $items = Segmen::where('id_serpo', $id_serpo)
@@ -102,5 +104,57 @@ class SegmenController extends Controller
             ->get(['id_segmen as id','nama_segmen as text']);
 
         return response()->json($items);
+    }
+
+    // ========= BULK STORE =========
+    public function bulkStore(Request $request)
+    {
+        $request->validate([
+            'id_serpo' => 'required|exists:serpos,id_serpo',
+            'names'    => 'required|string',
+        ]);
+
+        $raw = preg_split("/\r\n|\n|\r/", $request->names);
+        $clean = collect($raw)
+            ->map(fn($v) => preg_replace('/\s+/', ' ', trim($v)))
+            ->filter(fn($v) => $v !== '')
+            ->map(fn($v) => mb_strimwidth($v, 0, 100, '')) // batas 100 char
+            ->unique()
+            ->values();
+
+        if ($clean->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ada nama segmen yang valid.',
+            ], 422);
+        }
+
+        $existing = Segmen::where('id_serpo', $request->id_serpo)
+            ->whereIn('nama_segmen', $clean)
+            ->pluck('nama_segmen');
+
+        $toInsert = $clean->diff($existing)->values();
+
+        $now = now();
+        $rows = $toInsert->map(fn($name) => [
+            'id_serpo'    => $request->id_serpo,
+            'nama_segmen' => $name,
+            'created_at'  => $now,
+            'updated_at'  => $now,
+        ])->all();
+
+        DB::transaction(function() use ($rows) {
+            foreach (array_chunk($rows, 500) as $chunk) {
+                Segmen::insert($chunk);
+            }
+        });
+
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Import segmen selesai.',
+            'created'  => $toInsert->count(),
+            'skipped'  => $clean->count() - $toInsert->count(),
+            'total_in' => $clean->count(),
+        ]);
     }
 }

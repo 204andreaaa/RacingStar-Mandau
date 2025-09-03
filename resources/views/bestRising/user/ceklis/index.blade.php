@@ -1,7 +1,19 @@
 @extends('layouts.userapp')
 
 @section('main')
-@php use Illuminate\Support\Facades\Storage; @endphp
+@php
+  use Illuminate\Support\Facades\Storage;
+
+  // Helper URL gambar → selalu /storage/<path> (root-relative)
+  $toUrl = function ($p) {
+    $p = (string) $p;
+    if ($p === '') return '';
+    if (preg_match('#^https?://#i', $p)) return $p; // kalau sudah full URL, biarkan
+    $p = ltrim($p, '/');
+    $p = preg_replace('#^(public|storage)/#', '', $p);
+    return '/storage/'.$p; // symlink storage:link harus aktif
+  };
+@endphp
 
 <div class="content-wrapper">
   <section class="content-header mb-3">
@@ -93,40 +105,72 @@
                     @if ($needPhoto)
                       {{-- ===== FOTO BEFORE ===== --}}
                       <div class="col-md-6">
-                        <label class="form-label fw-semibold">Foto Before <small class="text-muted">(maks 3)</small></label>
-                        <div class="d-flex gap-2 align-items-start flex-wrap">
+                        <label class="form-label fw-semibold">Foto Before <small class="text-muted">(maks 5)</small></label>
+
+                        {{-- existing photos (server) --}}
+                        <div class="d-flex gap-2 align-items-start flex-wrap mb-1">
                           @if($already && $already->beforePhotos->count())
                             @foreach($already->beforePhotos as $pf)
-                              @php $url = Storage::disk('public')->url($pf->path); @endphp
+                              @php $url = $toUrl($pf->path); @endphp
                               <a href="{{ $url }}" target="_blank">
                                 <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="before">
                               </a>
                             @endforeach
                           @else
-                            <span class="text-muted small">Belum ada foto.</span>
+                            <span class="text-muted small">Belum ada foto tersimpan.</span>
                           @endif
                         </div>
-                        <input type="file" name="before_photo[{{ $a->id }}][]" class="form-control mt-2 limit-3" data-max="3" multiple accept="image/*">
-                        <small class="text-muted">Pilih hingga 3 foto. Mengunggah baru akan mengganti set lama.</small>
+
+                        {{-- smart uploader (client-side add incrementally) --}}
+                        <div class="smart-uploader" data-max="5">
+                          <div class="small text-muted mb-1 smart-files-label">Belum ada file dipilih.</div>
+                          <div class="smart-thumbs d-flex gap-2 flex-wrap mb-2"></div>
+                          <input
+                            type="file"
+                            name="before_photo[{{ $a->id }}][]"
+                            class="form-control smart-file"
+                            multiple
+                            accept="image/*"
+                            data-max="5">
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                          Kamu bisa menambah file sedikit-sedikit (maks 5). Saat disimpan, set baru akan mengganti set lama.
+                        </small>
                       </div>
 
                       {{-- ===== FOTO AFTER ===== --}}
                       <div class="col-md-6">
-                        <label class="form-label fw-semibold">Foto After <small class="text-muted">(maks 3)</small></label>
-                        <div class="d-flex gap-2 align-items-start flex-wrap">
+                        <label class="form-label fw-semibold">Foto After <small class="text-muted">(maks 5)</small></label>
+
+                        {{-- existing photos (server) --}}
+                        <div class="d-flex gap-2 align-items-start flex-wrap mb-1">
                           @if($already && $already->afterPhotos->count())
                             @foreach($already->afterPhotos as $pf)
-                              @php $url = Storage::disk('public')->url($pf->path); @endphp
+                              @php $url = $toUrl($pf->path); @endphp
                               <a href="{{ $url }}" target="_blank">
                                 <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="after">
                               </a>
                             @endforeach
                           @else
-                            <span class="text-muted small">Belum ada foto.</span>
+                            <span class="text-muted small">Belum ada foto tersimpan.</span>
                           @endif
                         </div>
-                        <input type="file" name="after_photo[{{ $a->id }}][]" class="form-control mt-2 limit-3" data-max="3" multiple accept="image/*">
-                        <small class="text-muted">Pilih hingga 3 foto. Mengunggah baru akan mengganti set lama.</small>
+
+                        {{-- smart uploader --}}
+                        <div class="smart-uploader" data-max="5">
+                          <div class="small text-muted mb-1 smart-files-label">Belum ada file dipilih.</div>
+                          <div class="smart-thumbs d-flex gap-2 flex-wrap mb-2"></div>
+                          <input
+                            type="file"
+                            name="after_photo[{{ $a->id }}][]"
+                            class="form-control smart-file"
+                            multiple
+                            accept="image/*"
+                            data-max="5">
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                          Kamu bisa menambah file sedikit-sedikit (maks 5). Saat disimpan, set baru akan mengganti set lama.
+                        </small>
                       </div>
                     @else
                       {{-- Aktivitas ini tidak memerlukan foto --}}
@@ -187,28 +231,111 @@
   .activity-card{transition:.2s;border-left:5px solid #0dcaf0}
   .activity-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
   .activity-card.border-success{border-left:5px solid #198754}
+
+  /* smart-uploader */
+  .smart-thumb-wrap{position:relative;display:inline-block}
+  .smart-thumb{width:90px;height:90px;object-fit:cover;border-radius:.5rem;border:1px solid rgba(0,0,0,.1)}
+  .smart-remove{
+    position:absolute;top:-6px;right:-6px;
+    width:22px;height:22px;line-height:18px;
+    border-radius:50%;
+    border:0;outline:0;
+    background:#dc3545;color:#fff;font-weight:700;cursor:pointer;
+  }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
+  // INIT enable/disable fields by checkbox
   document.querySelectorAll('.activity-card').forEach(function(card){
     const cb = card.querySelector('.toggle-done');
     const fs = card.querySelector('.activity-fields');
     if (!cb || !fs) return;
-
-    const enable = cb.checked && !cb.disabled;
-    if (enable) {
-      fs.removeAttribute('disabled');
-      fs.querySelectorAll('input,textarea,select,button').forEach(el => el.removeAttribute('disabled'));
-    } else {
-      fs.setAttribute('disabled','disabled');
-      fs.querySelectorAll('input,textarea,select,button').forEach(el => el.setAttribute('disabled','disabled'));
-    }
+    const setEnabled = (on) => {
+      if (on) {
+        fs.removeAttribute('disabled');
+        fs.querySelectorAll('input,textarea,select,button').forEach(el => el.removeAttribute('disabled'));
+      } else {
+        fs.setAttribute('disabled','disabled');
+        fs.querySelectorAll('input,textarea,select,button').forEach(el => el.setAttribute('disabled','disabled'));
+      }
+    };
+    setEnabled(cb.checked && !cb.disabled);
   });
 
+  // ===== SMART FILE UPLOADER =====
+  // Maintain a persistent DataTransfer per input, so picking again won't reset previous picks.
+  document.querySelectorAll('.smart-uploader .smart-file').forEach(function(input){
+    const wrap    = input.closest('.smart-uploader');
+    const max     = parseInt(input.dataset.max || wrap.dataset.max || '5', 10);
+    const labelEl = wrap.querySelector('.smart-files-label');
+    const thumbs  = wrap.querySelector('.smart-thumbs');
+
+    // store DataTransfer instance on the element to persist
+    let dt = new DataTransfer();
+
+    function render(){
+      const files = Array.from(dt.files);
+      // label
+      if (!files.length) {
+        labelEl.textContent = 'Belum ada file dipilih.';
+      } else {
+        labelEl.textContent = `Dipilih ${files.length}/${max} file: ${files.map(f => f.name).join(', ')}`;
+      }
+      // thumbs
+      thumbs.innerHTML = '';
+      files.forEach((f, idx) => {
+        const url = URL.createObjectURL(f);
+        const box = document.createElement('div');
+        box.className = 'smart-thumb-wrap me-2 mb-2';
+        box.innerHTML = `
+          <img src="${url}" class="smart-thumb" alt="">
+          <button type="button" class="smart-remove" title="Hapus" data-index="${idx}">×</button>
+        `;
+        thumbs.appendChild(box);
+        // revoke URL on load/cleanup
+        box.querySelector('img').onload = () => URL.revokeObjectURL(url);
+        // remove handler
+        box.querySelector('.smart-remove').addEventListener('click', function(){
+          const i = parseInt(this.dataset.index, 10);
+          const current = Array.from(dt.files);
+          const next = new DataTransfer();
+          current.forEach((ff, ii) => { if (ii !== i) next.items.add(ff); });
+          dt = next;
+          input.files = dt.files;
+          render();
+        });
+      });
+
+      // finally sync to input
+      input.files = dt.files;
+    }
+
+    input.addEventListener('change', function(){
+      const incoming = Array.from(input.files || []);
+      // avoid duplicates (name|size|lastModified)
+      const existing = new Set(Array.from(dt.files).map(f => `${f.name}|${f.size}|${f.lastModified}`));
+      for (const f of incoming) {
+        const key = `${f.name}|${f.size}|${f.lastModified}`;
+        if (!existing.has(key) && dt.files.length < max) {
+          dt.items.add(f);
+          existing.add(key);
+        }
+        if (dt.files.length >= max) break;
+      }
+      // clear the raw input so the same file can be re-picked later if removed
+      input.value = '';
+      render();
+    });
+
+    // initial
+    render();
+  });
+
+  // ===== Batasi handler lama (.limit-3) supaya tidak bentrok dengan smart-file =====
   document.addEventListener('change', function (e) {
     const el = e.target;
-    if (!el.matches('input[type="file"].limit-3')) return;
+    if (!el.matches('input[type="file"].limit-3') || el.classList.contains('smart-file')) return;
     const max = parseInt(el.dataset.max || '3', 10);
     const files = el.files;
     if (!files || files.length <= max) return;
@@ -223,6 +350,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
 
+  // ===== Segmen by region (tetap) =====
   const sess_serpo   = @json($checklist->id_serpo ?? '');
   const routeSegmenByRegion = rid => "{{ route('api.segmen.byRegion', ':rid') }}".replace(':rid', rid);
 

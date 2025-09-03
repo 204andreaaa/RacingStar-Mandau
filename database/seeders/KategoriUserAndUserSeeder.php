@@ -66,11 +66,11 @@ class KategoriUserAndUserSeeder extends Seeder
              * ----------------------------------------------------------------*/
             // Admin
             $admin = UserBestrising::firstOrCreate(
-                ['email' => 'admin@racingstar.test'],
+                ['email' => 'admin@mandau.id'],
                 [
-                    'nik'              => '00000001',
+                    'nik'              => 'RS-Mdu-01',
                     'nama'             => 'Admin Racing Star',
-                    'password'         => Hash::make('123321'),
+                    'password'         => Hash::make('Tnc912@)!@'),
                     'kategori_user_id' => $kategoriMap['Admin'],
                     'id_region'        => null,
                     'id_serpo'         => null,

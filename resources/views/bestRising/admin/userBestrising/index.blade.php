@@ -44,7 +44,8 @@
                         <div class="col-6">
                             <div class="form-group">
                                 <label>NIK</label>
-                                <input type="text" name="nik" id="nik" class="form-control" required>
+                                <input type="text" name="nik" id="nik" class="form-control" readonly>
+                                <small class="text-muted">Diisi otomatis.</small>
                             </div>
                         </div>
                         <div class="col-6">
@@ -143,7 +144,8 @@ $(function(){
         update  : "{{ route('admin.user-bestrising.update', ':id') }}",
         destroy : "{{ route('admin.user-bestrising.destroy', ':id') }}",
         serpoByRegion : "{{ route('admin.serpo.byRegion', ['id_region' => 'RID']) }}",
-        segmenBySerpo : "{{ route('admin.segmen.bySerpo', ['id_serpo' => 'SID']) }}", // tidak dipakai di UI SERPO
+        segmenBySerpo : "{{ route('admin.segmen.bySerpo', ['id_serpo' => 'SID']) }}",
+        nextNik : "{{ route('admin.user-bestrising.nextNik') }}", // ← baru
     };
     const urlUpdate   = id => ROUTES.update.replace(':id', id);
     const urlDestroy  = id => ROUTES.destroy.replace(':id', id);
@@ -247,15 +249,13 @@ $(function(){
         }
     });
 
-    // Tidak perlu load segmen saat serpo change (auto di backend)
-    $('#form_serpo').on('change', function(){ /* no-op */ });
-
     // Add
     $('#btnAdd').click(function() {
         $('#modalUserTitle').text('Tambah User');
         $('#formUser')[0].reset();
         $('#user_id').val('');
 
+        // Password wajib saat tambah
         $('#formPassword').show();
         $('#password').prop('required', true);
         $('#password_confirmation').prop('required', true);
@@ -265,6 +265,13 @@ $(function(){
         $serpo.empty().append('<option value="">-- Pilih Serpo --</option>');
 
         updateVisibilityByCategory();
+
+        // Ambil NIK otomatis dari server
+        $('#nik').val('Memuat...');
+        $.get(ROUTES.nextNik)
+            .done(res => $('#nik').val(res?.nik || ''))
+            .fail(() => $('#nik').val(''));
+
         $('#modalUser').modal('show');
     });
 
@@ -274,11 +281,12 @@ $(function(){
         $('#formUser')[0].reset();
 
         $('#user_id').val($(this).data('id'));
-        $('#nik').val($(this).data('nik'));
+        $('#nik').val($(this).data('nik'));       // readonly
         $('#nama').val($(this).data('nama'));
         $('#email').val($(this).data('email'));
         $('#kategori_user_id').val($(this).data('kategori_id'));
 
+        // Password opsional saat edit
         $('#formPassword').show();
         $('#password').prop('required', false).val('');
         $('#password_confirmation').prop('required', false).val('');
@@ -315,7 +323,11 @@ $(function(){
         })
         .done(function(res){
             $('#modalUser').modal('hide');
-            table.ajax.reload(null, false);
+            $('#formUser')[0].reset();
+            $('#user_id').val('');
+            $('#nik').val('');
+            $('#password').val(''); $('#password_confirmation').val('');
+            $('#table-kategori-user').DataTable().ajax.reload(null, false);
             const msg = res.message ?? (id ? 'Data berhasil diperbarui!' : 'Data berhasil ditambahkan!');
             swalSuccess(msg);
         })
@@ -340,7 +352,7 @@ $(function(){
 
             $.post(urlDestroy(id), { _method: 'DELETE' })
             .done(function(res){
-                table.ajax.reload(null, false);
+                $('#table-kategori-user').DataTable().ajax.reload(null, false);
                 swalSuccess(res.message ?? 'Data berhasil dihapus!');
             })
             .fail(function(xhr){

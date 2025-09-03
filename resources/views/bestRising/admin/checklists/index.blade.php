@@ -50,7 +50,7 @@
 <style>
   /* kasih jarak tombol export biar rapi di sebelah dropdown entries */
   #table-checklists_length { display:flex; align-items:center; gap:.75rem; }
-  #btnExport { white-space: nowrap; }
+  #btnExport, #btnDelAll { white-space: nowrap; }
 </style>
 
 <script>
@@ -59,10 +59,11 @@ $(function(){
 
   // route helpers
   const ROUTES = {
-    index   : "{{ route('admin.checklists.index') }}",
-    destroy : "{{ route('admin.checklists.destroy', ':id') }}",
-    show    : "{{ route('admin.checklists.show', ':id') }}", // kalau dipakai
-    export  : "{{ route('admin.checklists.export') }}",      // export GET
+    index     : "{{ route('admin.checklists.index') }}",
+    destroy   : "{{ route('admin.checklists.destroy', ':id') }}",
+    show      : "{{ route('admin.checklists.show', ':id') }}",
+    export    : "{{ route('admin.checklists.export') }}",
+    destroyAll: "{{ route('admin.checklists.destroyAll') }}",
   };
   const urlDestroy = id => ROUTES.destroy.replace(':id', id);
   const urlShow    = id => ROUTES.show.replace(':id', id);
@@ -92,11 +93,13 @@ $(function(){
       { data:'action',      orderable:false, searchable:false },
     ],
     initComplete: function(){
-      // inject tombol Export di samping "Show X entries"
+      // inject tombol Export & Hapus Semua di samping "Show X entries"
+      const $len = $('#table-checklists_length');
       if ($('#btnExport').length === 0) {
-        $('#table-checklists_length').append(
-          '<button id="btnExport" class="btn btn-sm btn-success">Export Excel</button>'
-        );
+        $len.append('<button id="btnExport" class="btn btn-sm btn-success">Export Excel</button>');
+      }
+      if ($('#btnDelAll').length === 0) {
+        $len.append('<button id="btnDelAll" class="btn btn-sm btn-danger">Hapus Semua (sesuai filter)</button>');
       }
     }
   });
@@ -121,49 +124,74 @@ $(function(){
     window.location.href = ROUTES.export + '?' + params.toString();
   });
 
-  // hapus (SweetAlert kalau ada)
-  // helper toast SweetAlert2
+  // helper SweetAlert
   const Toast = (typeof Swal !== 'undefined')
     ? Swal.mixin({ toast:true, position:'top-end', showConfirmButton:false, timer:2000, timerProgressBar:true })
     : null;
 
+  // HAPUS SATUAN
   $(document).on('click', '.btn-del', function(){
-  const $btn = $(this);
-  const url  = $btn.data('url');
+    const $btn = $(this);
+    const url  = $btn.data('url');
 
-  Swal.fire({
-    title: 'Hapus checklist ini?',
-    text: 'Semua item aktivitasnya juga akan terhapus.',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Ya, hapus',
-    cancelButtonText: 'Batal'
-  }).then(r => {
-    if (!r.isConfirmed) return;
+    Swal.fire({
+      title: 'Hapus checklist ini?',
+      text: 'Semua item, hasil aktivitas, dan FOTO terkait akan terhapus.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, hapus',
+      cancelButtonText: 'Batal'
+    }).then(r => {
+      if (!r.isConfirmed) return;
 
-    $btn.prop('disabled', true);
+      $btn.prop('disabled', true);
 
-    $.post(url, {_method:'DELETE'})
-      .done(res => {
-        // reload datatable tanpa reset halaman
-        $('#table-checklists').DataTable().ajax.reload(null, false);
-
-        // tampilkan modal sukses di tengah
-        Swal.fire({
-          title: 'Berhasil!',
-          text: res?.message ?? 'Checklist dihapus.',
-          icon: 'success',
-          confirmButtonText: 'OK'
-        });
-      })
-      .fail(xhr => {
-        const msg = xhr.responseJSON?.message ?? 'Gagal menghapus.';
-        Swal.fire('Gagal', msg, 'error');
-      })
-      .always(() => $btn.prop('disabled', false));
+      $.post(url, {_method:'DELETE'})
+        .done(res => {
+          $('#table-checklists').DataTable().ajax.reload(null, false);
+          Swal.fire({ title: 'Berhasil!', text: res?.message ?? 'Checklist dihapus.', icon: 'success', confirmButtonText: 'OK' });
+        })
+        .fail(xhr => {
+          const msg = xhr.responseJSON?.message ?? 'Gagal menghapus.';
+          Swal.fire('Gagal', msg, 'error');
+        })
+        .always(() => $btn.prop('disabled', false));
+    });
   });
-});
 
+  // HAPUS MASSAL (sesuai filter + pencarian global)
+  $(document).on('click', '#btnDelAll', function(){
+    Swal.fire({
+      title: 'Hapus SEMUA data sesuai filter?',
+      html: 'Ini akan menghapus semua checklist yang sedang difilter <b>BESERTA seluruh foto</b> di storage/public.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, hapus semua',
+      cancelButtonText: 'Batal'
+    }).then(r => {
+      if (!r.isConfirmed) return;
+
+      const payload = {
+        _method: 'DELETE',
+        team:      $('#f_team').val() || '',
+        status:    $('#f_status').val() || '',
+        date_from: $('#f_from').val() || '',
+        date_to:   $('#f_to').val() || '',
+        search:    $('#table-checklists').DataTable().search() || ''
+      };
+
+      $.ajax({
+        url: ROUTES.destroyAll,
+        type: 'POST',
+        data: payload
+      }).done(res => {
+        $('#table-checklists').DataTable().ajax.reload(null, false);
+        Swal.fire('Berhasil', res?.message || 'Data dihapus.', 'success');
+      }).fail(xhr => {
+        Swal.fire('Gagal', xhr.responseJSON?.message || 'Error', 'error');
+      });
+    });
+  });
 
 });
 </script>

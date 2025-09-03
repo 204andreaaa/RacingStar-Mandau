@@ -20,7 +20,7 @@ use App\Http\Controllers\SegmenController;
 | Auth (manual)
 |--------------------------------------------------------------------------
 */
-Route::get('/login', [ManualAuthController::class, 'loginForm'])->name('login');
+Route::get('/', [ManualAuthController::class, 'loginForm'])->name('login');
 Route::post('/login', [ManualAuthController::class, 'login'])->name('login.post');
 Route::post('/logout', [ManualAuthController::class, 'logout'])->name('logout');
 
@@ -65,10 +65,14 @@ Route::middleware('manual.auth')->group(function () {
         Route::get('/serpo/export', [SerpoController::class, 'export'])->name('serpo.export');
         Route::get('checklists/export', [AdminChecklistController::class, 'export'])->name('checklists.export');
         Route::get('checklists/allresult/export', [AdminChecklistController::class, 'exportAllResult'])->name('checklists.allresult.export');
+        Route::delete('checklists/destroy-all', [AdminChecklistController::class, 'destroyAll'])->name('checklists.destroyAll');
+        Route::get('user-bestrising/next-nik', [UserBestrisingController::class, 'nextNik'])->name('user-bestrising.nextNik');
+
 
         Route::get('checklists/allresult', [AdminChecklistController::class, 'allresult'])->name('checklists.allresult');
         // Checklist admin (index/show/destroy)
         Route::resource('checklists', AdminChecklistController::class)->only(['index','show','destroy']);
+
 
         // Master data (kalau ini memang khusus admin)
         Route::resource('aktifitas',         ActivityController::class)->parameters(['aktifitas' => 'activity'])->names('aktifitas');
@@ -81,6 +85,7 @@ Route::middleware('manual.auth')->group(function () {
         // Dependent dropdown utk halaman admin (kalau perlu)
         Route::get('serpo/by-region/{id_region}', [SerpoController::class,  'byRegion'])->name('serpo.byRegion');
         Route::get('segmen/by-serpo/{id_serpo}',  [SegmenController::class, 'bySerpo'])->name('segmen.bySerpo');
+        Route::post('segmen/bulk-store',   [SegmenController::class, 'bulkStore'])->name('segmen.bulkStore');
 
     });
 });

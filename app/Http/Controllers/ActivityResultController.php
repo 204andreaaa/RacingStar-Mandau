@@ -9,7 +9,7 @@ use App\Models\Checklist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
-use Intervention\Image\Facades\Image; // <-- ADD
+use Intervention\Image\Facades\Image; // <-- kompres gambar
 
 class ActivityResultController extends Controller
 {
@@ -33,7 +33,7 @@ class ActivityResultController extends Controller
     /**
      * Hitung pemakaian kuota pada periode berjalan.
      * Gunakan tanggal submit terakhir (submitted_at) jika ada; jika null, fallback ke created_at.
-     * $excludeChecklistId dipakai saat ENFORCE di simpan supaya current checklist boleh edit ulang.
+     * $exceptChecklistId dipakai saat ENFORCE di simpan supaya current checklist boleh edit ulang.
      */
     private function quotaUsed( int $userId, int $activityId, string $period, ?int $exceptChecklistId = null ): int
     {
@@ -98,7 +98,7 @@ class ActivityResultController extends Controller
     }
 
     /* ======================================================
-     * NEW: Simpan gambar terkompres (≈≤1MB) ke disk 'public'
+     * Simpan gambar terkompres (≈≤1MB) ke disk 'public'
      * ====================================================== */
     private function saveCompressedImage(\Illuminate\Http\UploadedFile $file, string $folder): string
     {
@@ -165,11 +165,19 @@ class ActivityResultController extends Controller
                 $activity = Activity::find($aid);
                 if (!$activity) { continue; }
 
-                // ===== ENFORCE LIMIT
+                // === Tentukan apakah aktivitas ini MEMERLUKAN foto? ===
+                // Pakai kolom 'requires_photo' kalau ada; kalau tidak ada, fallback daftar TANPA foto.
+                if (!is_null($activity->getAttribute('requires_photo'))) {
+                    $needPhoto = (bool) $activity->requires_photo; // true=butuh foto, false=tanpa foto
+                } else {
+                    $noPhotoIds = [2]; // << fallback lama: ID yang tidak perlu foto
+                    $needPhoto  = !in_array($aid, $noPhotoIds, true);
+                }
+
+                // ===== ENFORCE LIMIT kuota per periode (hanya untuk status=done)
                 $period = $activity->limit_period ?? 'none';
                 if ($status === 'done' && $period !== 'none') {
                     $quota = max(1, (int)($activity->limit_quota ?? 1));
-                    // dihitung per user + activity, across semua checklist
                     $used  = $this->quotaUsed($checklist->user_id, $aid, $period, $checklist->id);
                     if ($used >= $quota) {
                         [, , $label] = $this->periodRange($period);
@@ -202,24 +210,16 @@ class ActivityResultController extends Controller
                 $record->submitted_at = now();
                 $record->save(); // <-- penting, supaya $record->id ada
 
-                // VALIDASI file untuk status DONE (opsi minimal 1 kalau belum ada sama sekali)
-                if ($status === 'done') {
+                // === VALIDASI file: HANYA jika status=done DAN aktivitas MEMERLUKAN foto ===
+                if ($status === 'done' && $needPhoto) {
                     $hasBefore = $record->beforePhotos()->exists();
                     $hasAfter  = $record->afterPhotos()->exists();
 
                     $rules = [
-                        "before_photo.$aid"   => [
-                            $hasBefore ? 'nullable' : 'required',
-                            'array',
-                            'max:3',
-                        ],
+                        "before_photo.$aid"   => [$hasBefore ? 'nullable' : 'required','array','max:5'],
                         "before_photo.$aid.*" => ['image','mimes:jpg,jpeg,png','max:5120'],
 
-                        "after_photo.$aid"    => [
-                            $hasAfter ? 'nullable' : 'required',
-                            'array',
-                            'max:3',
-                        ],
+                        "after_photo.$aid"    => [$hasAfter ? 'nullable' : 'required','array','max:5'],
                         "after_photo.$aid.*"  => ['image','mimes:jpg,jpeg,png','max:5120'],
                     ];
 
@@ -237,10 +237,9 @@ class ActivityResultController extends Controller
                     $record->beforePhotos()->delete();
 
                     $files = $req->file("before_photo.$aid");
-                    foreach (array_slice($files, 0, 3) as $idx => $f) {
+                    foreach (array_slice($files, 0, 5) as $f) {
                         if (!$f || !$f->isValid()) continue;
-                        // $path = $f->store('checklists/before', 'public'); // OLD
-                        $path = $this->saveCompressedImage($f, 'checklists/before'); // NEW
+                        $path = $this->saveCompressedImage($f, 'checklists/before');
                         ActivityResultPhoto::create([
                             'activity_result_id' => $record->id,
                             'kind'       => 'before',
@@ -259,10 +258,9 @@ class ActivityResultController extends Controller
                     $record->afterPhotos()->delete();
 
                     $files = $req->file("after_photo.$aid");
-                    foreach (array_slice($files, 0, 3) as $idx => $f) {
+                    foreach (array_slice($files, 0, 5) as $f) {
                         if (!$f || !$f->isValid()) continue;
-                        // $path = $f->store('checklists/after', 'public'); // OLD
-                        $path = $this->saveCompressedImage($f, 'checklists/after'); // NEW
+                        $path = $this->saveCompressedImage($f, 'checklists/after');
                         ActivityResultPhoto::create([
                             'activity_result_id' => $record->id,
                             'kind'       => 'after',
