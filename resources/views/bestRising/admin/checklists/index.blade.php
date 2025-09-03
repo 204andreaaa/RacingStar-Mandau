@@ -34,7 +34,7 @@
             <th>Selesai</th>
             <th>Team</th>
             <th>Nama</th>
-            <th>Lokasi (Region / Serpo / Segmen)</th>
+            <th>Lokasi (Region / Serpo)</th>
             <th>Total Star</th>
             <th>Status</th>
             <th>Aksi</th>

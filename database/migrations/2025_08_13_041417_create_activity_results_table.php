@@ -17,12 +17,10 @@ return new class extends Migration
             // simple aja dulu: belum pakai foreign key constraint
             $table->unsignedBigInteger('user_id');      // id user pengisi
             $table->unsignedBigInteger('activity_id');  // id aktivitas
-            $table->unsignedBigInteger('id_segmen');  // id aktivitas
+            $table->unsignedBigInteger('id_segmen')->nullable();  // id aktivitas
 
             $table->dateTime('submitted_at');           // waktu submit
             $table->string('status')->default('done');  // done/skipped (string dulu)
-            $table->string('before_photo')->nullable();             // path foto before
-            $table->string('after_photo')->nullable();              // path foto after
             $table->unsignedInteger('point_earned')->default(0); // snapshot poin
             $table->text('note')->nullable();           // catatan opsional
 

@@ -58,7 +58,7 @@ class ChecklistsExport implements FromQuery, WithHeadings, WithMapping, ShouldAu
             'Selesai',
             'Team',
             'Nama',
-            'Lokasi (Region / Serpo / Segmen)',
+            'Lokasi (Region / Serpo)',
             'Total Star',
             'Status'
         ];
@@ -74,8 +74,7 @@ class ChecklistsExport implements FromQuery, WithHeadings, WithMapping, ShouldAu
 
         $region = $row->region->nama_region ?? '-';
         $serpo  = $row->serpo->nama_serpo   ?? '-';
-        $segmen = $row->segmen->nama_segmen ?? '-';
-        $lokasi = "{$region} / {$serpo} / {$segmen}";
+        $lokasi = "{$region} / {$serpo}";
 
         return [
             $this->rowNumber, // nomor urut

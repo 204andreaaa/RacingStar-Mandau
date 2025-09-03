@@ -11,7 +11,7 @@
     </div>
   </section>
 
-  <form method="post" action="{{ route('checklists.item.bulkStore', $checklist->id) }}" enctype="multipart/form-data">
+  <form method="post" action="{{ route('checklists.item.store', $checklist->id) }}" enctype="multipart/form-data">
     @csrf
 
     @if(session('success')) <div class="alert alert-success">{{ session('success') }}</div> @endif
@@ -26,21 +26,26 @@
     <div class="row g-3">
       @foreach($activities as $i => $a)
         @php
-          $already      = isset($items) ? $items->firstWhere('activity_id', $a->id) : null;
-          $isDone       = $already && $already->status === 'done';
-          $beforeExists = $already && $already->before_photo && Storage::disk('public')->exists($already->before_photo);
-          $afterExists  = $already && $already->after_photo  && Storage::disk('public')->exists($already->after_photo);
+          $already = isset($items) ? $items->firstWhere('activity_id', $a->id) : null;
+          $isDone  = $already && $already->status === 'done';
+          $beforeCount  = $already?->beforePhotos->count() ?? 0;
+          $afterCount   = $already?->afterPhotos->count()  ?? 0;
 
+          $period = $a->limit_period ?? 'none';
           $u = $usage[$a->id] ?? [
             'used'    => 0,
-            'max'     => (($a->limit_period ?? 'none') !== 'none') ? (int)($a->limit_quota ?? 1) : null,
+            'max'     => $period !== 'none' ? (int)($a->limit_quota ?? 1) : null,
             'blocked' => false,
-            'label'   => match($a->limit_period ?? 'none') {
-              'daily' => 'Hari ini', 'weekly' => 'Minggu ini', 'monthly' => 'Bulan ini', default => 'Tidak dibatasi',
+            'label'   => match($period) {
+              'daily' => 'Hari ini',
+              'weekly' => 'Minggu ini',
+              'monthly' => 'Bulan ini',
+              default => 'Tidak dibatasi',
             },
           ];
+
           $used    = (int)($u['used'] ?? 0);
-          $max     = $u['max']; // null = tak dibatasi
+          $max     = $u['max'];                 // null = tidak dibatasi
           $blocked = (bool)($u['blocked'] ?? false);
           $label   = $u['label'] ?? 'Tidak dibatasi';
 
@@ -66,70 +71,98 @@
                   @if($shouldDisable) <span class="badge bg-danger ms-1">Penuh</span>     @endif
                 </div>
 
-                <div class="form-check text-nowrap">
-                  <input type="checkbox"
-                         class="form-check-input toggle-done"
-                         name="status[{{ $a->id }}]"
-                         data-period="{{ $a->limit_period ?? 'none' }}"
-                         data-used="{{ $used }}"
-                         data-max="{{ $max === null ? '' : $max }}"
-                         @if($isDone) checked @endif
-                         @if($shouldDisable) disabled @endif
-                         onchange="(function(cb){var card=cb.closest('.activity-card');var fs=card&&card.querySelector('.activity-fields');if(!fs)return;var p=cb.dataset.period||'none';var u=parseInt(cb.dataset.used||'0',10);var mr=cb.dataset.max||'';var m=mr===''?null:parseInt(mr,10);var hasQ=Number.isInteger(m)&&m>0;if(cb.checked&&p!=='none'&&hasQ&&u>=m){cb.checked=false;alert('Kuota aktivitas ini sudah penuh '+(p==='daily'?'hari ini':p==='weekly'?'minggu ini':'bulan ini')+'.');return;}if(cb.checked){fs.removeAttribute('disabled');fs.querySelectorAll('input,textarea,select,button').forEach(function(el){el.removeAttribute('disabled');});}else{fs.setAttribute('disabled','disabled');fs.querySelectorAll('input,textarea,select,button').forEach(function(el){el.setAttribute('disabled','disabled');});}})(this)">
-                  <label class="form-check-label">Done</label>
-                </div>
+                @if ((($max - $used != 0) || $used == 0) || $isDone)
+                  <div class="form-check text-nowrap">
+                    <input type="checkbox"
+                          class="form-check-input toggle-done"
+                          name="status[{{ $a->id }}]"
+                          data-period="{{ $a->limit_period ?? 'none' }}"
+                          data-used="{{ $used }}"
+                          data-max="{{ $max === null ? '' : $max }}"
+                          @if($isDone) checked @endif
+                          @if($shouldDisable) disabled @endif
+                          onchange="(function(cb){var card=cb.closest('.activity-card');var fs=card&&card.querySelector('.activity-fields');if(!fs)return;var p=cb.dataset.period||'none';var u=parseInt(cb.dataset.used||'0',10);var mr=cb.dataset.max||'';var m=mr===''?null:parseInt(mr,10);var hasQ=Number.isInteger(m)&&m>0;if(cb.checked&&p!=='none'&&hasQ&&u>=m){cb.checked=false;alert('Kuota aktivitas ini sudah penuh '+(p==='daily'?'hari ini':p==='weekly'?'minggu ini':'bulan ini')+'.');return;}if(cb.checked){fs.removeAttribute('disabled');fs.querySelectorAll('input,textarea,select,button').forEach(function(el){el.removeAttribute('disabled');});}else{fs.setAttribute('disabled','disabled');fs.querySelectorAll('input,textarea,select,button').forEach(function(el){el.setAttribute('disabled','disabled');});}})(this)">
+                    <label class="form-check-label">Done</label>
+                  </div>
+                @endif
               </div>
 
               {{-- >>> JANGAN kasih disabled di sini. JS yang set saat load & saat ceklis. --}}
-              <fieldset class="activity-fields">
-                <div class="row g-3">
-                  <div class="col-md-6">
-                    <label class="form-label fw-semibold">Foto Before</label>
-                    <div class="d-flex gap-2 align-items-start flex-nowrap">
-                      @if($beforeExists)
-                        @php $urlB = Storage::disk('public')->url($already->before_photo); @endphp
-                        <a href="{{ $urlB }}" target="_blank"><img src="{{ $urlB }}" class="img-thumbnail rounded border" width="90" alt="before"></a>
-                      @endif
-                      <input type="file" name="before_photo[{{ $a->id }}]" class="form-control">
+              @if ((($max - $used != 0) || $used == 0) || $isDone)
+                <fieldset class="activity-fields">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">Foto Before <small class="text-muted">(maks 3)</small></label>
+                      <div class="d-flex gap-2 align-items-start flex-wrap">
+                        @if($already && $already->beforePhotos->count())
+                          @foreach($already->beforePhotos as $pf)
+                            @php $url = Storage::disk('public')->url($pf->path); @endphp
+                            <a href="{{ $url }}" target="_blank">
+                              <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="before">
+                            </a>
+                          @endforeach
+                        @else
+                          <span class="text-muted small">Belum ada foto.</span>
+                        @endif
+                      </div>
+                      <input type="file"
+                            name="before_photo[{{ $a->id }}][]"
+                            class="form-control mt-2 limit-3"
+                            data-max="3"
+                            multiple
+                            accept="image/*">
+                      <small class="text-muted">Pilih hingga 3 foto. Mengunggah baru akan mengganti set lama.</small>
                     </div>
-                  </div>
 
-                  <div class="col-md-6">
-                    <label class="form-label fw-semibold">Foto After</label>
-                    <div class="d-flex gap-2 align-items-start flex-nowrap">
-                      @if($afterExists)
-                        @php $urlA = Storage::disk('public')->url($already->after_photo); @endphp
-                        <a href="{{ $urlA }}" target="_blank"><img src="{{ $urlA }}" class="img-thumbnail rounded border" width="90" alt="after"></a>
-                      @endif
-                      <input type="file" name="after_photo[{{ $a->id }}]" class="form-control">
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">Foto After <small class="text-muted">(maks 3)</small></label>
+                      <div class="d-flex gap-2 align-items-start flex-wrap">
+                        @if($already && $already->afterPhotos->count())
+                          @foreach($already->afterPhotos as $pf)
+                            @php $url = Storage::disk('public')->url($pf->path); @endphp
+                            <a href="{{ $url }}" target="_blank">
+                              <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="after">
+                            </a>
+                          @endforeach
+                        @else
+                          <span class="text-muted small">Belum ada foto.</span>
+                        @endif
+                      </div>
+                      <input type="file"
+                            name="after_photo[{{ $a->id }}][]"
+                            class="form-control mt-2 limit-3"
+                            data-max="3"
+                            multiple
+                            accept="image/*">
+                      <small class="text-muted">Pilih hingga 3 foto. Mengunggah baru akan mengganti set lama.</small>
                     </div>
-                  </div>
 
-                  <div class="col-12">
-                    <label class="form-label fw-semibold">Catatan</label>
-                    <textarea name="note[{{ $a->id }}]" class="form-control" rows="2" placeholder="opsional">{{ $already->note ?? '' }}</textarea>
-                    @if($shouldDisable)
-                      <div class="small text-danger mt-1">Kuota aktivitas ini sudah penuh {{ $label }} ({{ $used }}/{{ $max }}).</div>
+                    <div class="col-12">
+                      <label class="form-label fw-semibold">Catatan/Lokasi</label>
+                      <textarea name="note[{{ $a->id }}]" class="form-control" rows="2" placeholder="opsional">{{ $already->note ?? '' }}</textarea>
+                      @if($shouldDisable)
+                        <div class="small text-danger mt-1">Kuota aktivitas ini sudah penuh {{ $label }} ({{ $used }}/{{ $max }}).</div>
+                      @endif
+                    </div>
+
+                    @if ($a->is_checked_segmen)
+                      <div class="col-md-6">
+                        <label class="form-label">Segmen</label>
+                        <select
+                          name="id_segmen[{{ $a->id }}]"
+                          id="id_segmen_{{ $a->id }}"
+                          class="form-control br-control segmen-select"
+                          {{-- data-selected="{{ $already->id_segmen ?? '' }}" --}}
+                          data-selected="{{ old('id_segmen.'.$a->id, $already->id_segmen ?? '') }}"
+                          required>
+                          <option value="">— pilih segmen —</option>
+                        </select>
+                        <small class="text-muted">Daftar segmen mengikuti region dari Serpo.</small>
+                      </div>
                     @endif
                   </div>
-
-                  @if ($a->is_checked_segmen)
-                    <div class="col-md-6">
-                      <label class="form-label">Segmen</label>
-                      <select
-                        name="id_segmen[{{ $a->id }}]"
-                        id="id_segmen_{{ $a->id }}"
-                        class="form-control br-control segmen-select"
-                        {{-- data-selected="{{ $already->id_segmen ?? '' }}" --}}
-                        data-selected="{{ old('id_segmen.'.$a->id, $already->id_segmen ?? '') }}"
-                        required>
-                        <option value="">— pilih segmen —</option>
-                      </select>
-                      <small class="text-muted">Daftar segmen mengikuti region dari Serpo.</small>
-                    </div>
-                  @endif
-                </div>
-              </fieldset>
+                </fieldset>
+              @endif
             </div>
           </div>
         </div>
@@ -171,6 +204,24 @@ document.addEventListener('DOMContentLoaded', function(){
     } else {
       fs.setAttribute('disabled','disabled');
       fs.querySelectorAll('input,textarea,select,button').forEach(el => el.setAttribute('disabled','disabled'));
+    }
+  });
+
+  // Batasi input multiple max N file dari depan
+  document.addEventListener('change', function (e) {
+    const el = e.target;
+    if (!el.matches('input[type="file"].limit-3')) return;
+    const max = parseInt(el.dataset.max || '3', 10);
+    const files = el.files;
+    if (!files || files.length <= max) return;
+    try {
+      const dt = new DataTransfer();
+      for (let i = 0; i < Math.min(files.length, max); i++) dt.items.add(files[i]);
+      el.files = dt.files;
+      alert(`Maksimal ${max} foto. Hanya ${max} foto pertama yang dipakai.`);
+    } catch {
+      alert(`Maksimal ${max} foto. Silakan pilih ulang (≤ ${max}).`);
+      el.value = '';
     }
   });
 

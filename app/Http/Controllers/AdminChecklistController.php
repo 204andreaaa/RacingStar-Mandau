@@ -157,8 +157,7 @@ class AdminChecklistController extends Controller
                 ->addColumn('lokasi', function($row){
                     $region = $row->region->nama_region ?? '-';
                     $serpo  = $row->serpo->nama_serpo   ?? '-';
-                    $segmen = $row->segmen->nama_segmen ?? '-';
-                    return "{$region} / {$serpo} / {$segmen}";
+                    return "{$region} / {$serpo}";
                 })
                 ->addColumn('action', function($row){
                     $btnShow = '<a class="btn btn-sm btn-outline-primary mr-1" href="'.route('admin.checklists.show', $row->id).'">Detail</a>';

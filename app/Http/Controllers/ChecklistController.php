@@ -10,11 +10,18 @@ use App\Models\Segmen;
 use App\Models\ActivityResult;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\ActivityResultController;
 
 
 class ChecklistController extends Controller
 {
-public function start(Request $req)
+    protected $activityResultController;
+
+    public function __construct(ActivityResultController $activityResultController)
+    {
+        $this->activityResultController = $activityResultController;
+    }
+    public function start(Request $req)
     {
         $team = strtoupper($req->query('team', 'SERPO'));
 
@@ -25,171 +32,171 @@ public function start(Request $req)
     }
 
   // POST create sesi
-  public function store(Request $req)
-  {
-      // Ambil kategori dari session manual auth
-      $auth = session('auth_user') ?? [];
-      $kat  = strtoupper(trim($auth['kategori_nama'] ?? '')); // 'SERPO' | 'NOC' | 'ADMIN' | dll
+    public function store(Request $req)
+    {
+        // Ambil kategori dari session manual auth
+        $auth = session('auth_user') ?? [];
+        $kat  = strtoupper(trim($auth['kategori_nama'] ?? '')); // 'SERPO' | 'NOC' | 'ADMIN' | dll
 
-      // RULES dasar (selalu wajib)
-      $rules = [
-          'team'      => ['required','string'],
-          'user_id'   => ['required','integer'],
-          'id_region' => ['required','integer'],
-      ];
+        // RULES dasar (selalu wajib)
+        $rules = [
+            'team'      => ['required','string'],
+            'user_id'   => ['required','integer'],
+            'id_region' => ['required','integer'],
+        ];
 
-      // Kalau SERPO, wajib serpo + segmen
-      if ($kat === 'SERPO') {
-          $rules['id_serpo']  = ['required','integer'];
-      }
+        // Kalau SERPO, wajib serpo + segmen
+        if ($kat === 'SERPO') {
+            $rules['id_serpo']  = ['required','integer'];
+        }
 
-      // NOC/ADMIN: serpo & segmen tidak diwajibkan
-      $data = $req->validate($rules);
+        // NOC/ADMIN: serpo & segmen tidak diwajibkan
+        $data = $req->validate($rules);
 
-      // Normalisasi field yg tidak dipakai
-      $idSerpo  = $kat === 'SERPO' ? ($data['id_serpo']  ?? null) : null;
+        // Normalisasi field yg tidak dipakai
+        $idSerpo  = $kat === 'SERPO' ? ($data['id_serpo']  ?? null) : null;
 
-      $checklist = Checklist::create([
-          'user_id'   => $data['user_id'],
-          'team'      => $data['team'],
-          'id_region' => $data['id_region'],
-          'id_serpo'  => $idSerpo,   // null utk NOC/ADMIN
-          'started_at'=> now(),
-          'status'    => 'pending',
-      ]);
+        $checklist = Checklist::create([
+            'user_id'   => $data['user_id'],
+            'team'      => $data['team'],
+            'id_region' => $data['id_region'],
+            'id_serpo'  => $idSerpo,   // null utk NOC/ADMIN
+            'started_at'=> now(),
+            'status'    => 'pending',
+        ]);
 
-      // kalau route model binding belum diset, pakai id
-      return redirect()->route('checklists.show', $checklist->id);
-  }
+        // kalau route model binding belum diset, pakai id
+        return redirect()->route('checklists.show', $checklist->id);
+    }
 
 
   // Halaman ceklis: list aktivitas + form upload item + list item yang sudah ditambahkan
-  public function show(Checklist $checklist)
-  {
-      // ambil team dari session:kategori_nama (case-insensitive)
-      $kat = strtolower((string) data_get(session('auth_user'), 'kategori_nama', ''));
-      $teamId = str_contains($kat, 'serpo') ? 1 : (str_contains($kat, 'noc') ? 2 : null);
+    public function show(Checklist $checklist)
+    {
+        $kat = strtolower((string) data_get(session('auth_user'), 'kategori_nama', ''));
+        $teamId = str_contains($kat, 'serpo') ? 1 : (str_contains($kat, 'noc') ? 2 : null);
 
-      $activities = Activity::query()
-          ->where('is_active', true)
-          ->when($teamId, fn($q) => $q->where('team_id', $teamId))
-          ->orderBy('name')
-          ->get();
+        $activities = Activity::query()
+            ->where('is_active', true)
+            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->orderBy('name')
+            ->get();
 
-      // items yang sudah disimpan (filter berdasar team activity kalau team terdeteksi)
-      $items = ActivityResult::with('activity')
-          ->where('checklist_id', $checklist->id)
-          ->when($teamId, fn($q) => $q->whereHas('activity', fn($qa) => $qa->where('team_id', $teamId)))
-          ->orderByDesc('submitted_at')
-          ->get();
+        // items yg sudah disimpan untuk checklist ini (ikut filter team activity)
+        $items = ActivityResult::with(['activity','beforePhotos','afterPhotos'])
+            ->where('checklist_id', $checklist->id)
+            ->when($teamId, fn($q) => $q->whereHas('activity', fn($qa) => $qa->where('team_id', $teamId)))
+            ->orderByDesc('submitted_at')
+            ->get();
 
-      return view('bestRising.user.ceklis.index', compact('checklist','activities','items'));
-  }
+        $usage = $this->activityResultController->usageForActivities($checklist->user_id, $activities);
 
-
-  public function show_result(Checklist $checklist)
-  {
-    $meta = DB::table('checklists as c')
-        ->leftJoin('user_bestrising as u', 'u.id_userBestrising', '=', 'c.user_id')
-        ->leftJoin('regions as r', 'r.id_region', '=', 'c.id_region')
-        ->leftJoin('serpos  as s', 's.id_serpo',   '=', 'c.id_serpo')
-        ->leftJoin('segmens as g', 'g.id_segmen',  '=', 'c.id_segmen')
-        ->where('c.id', $checklist->id)
-        ->select([
-            'c.*','u.nama as user_nama','r.nama_region','s.nama_serpo','g.nama_segmen'
-        ])->first();
-
-    // items (aktivitas yang diceklis)
-    $items = ActivityResult::with('activity')
-        ->where('checklist_id', $checklist->id)
-        ->orderByDesc('submitted_at')
-        ->get();
-
-    return view('bestRising.user.ceklis.show', compact('checklist','meta','items'));
-  }
-
-  // Selesai sesi: hitung total
-  public function finish(Request $req, Checklist $checklist)
-  {
-    $total = ActivityResult::where('checklist_id', $checklist->id)->sum('point_earned');
-    $checklist->update([
-      'status'       => 'completed',
-      'submitted_at' => now(),
-      'total_point'  => $total,
-    ]);
-    return back()->with('success', 'Checklist selesai. Total poin: '.$total);
-  }
-
-  public function tableCeklis(Request $request) 
-  {
-    
-    if ($request->ajax()) {
-      $currentUser = $request->session()->get('auth_user');
-
-      $q = \DB::table('checklists as c')
-          ->leftJoin('user_bestrising as u', 'u.id_userBestrising', '=', 'c.user_id')
-          ->leftJoin('regions as r', 'r.id_region', '=', 'c.id_region')
-          ->leftJoin('serpos  as s', 's.id_serpo',   '=', 'c.id_serpo')
-          ->leftJoin('segmens as g', 'g.id_segmen',  '=', 'c.id_segmen')
-          ->select([
-              'c.id','c.team','c.status','c.total_point','c.started_at','c.submitted_at',
-              'u.nama as user_nama',
-              'r.nama_region','s.nama_serpo','g.nama_segmen',
-          ])
-          ->where('user_id', $currentUser['id'])
-          ->orderByDesc('c.id');
-
-      // filter custom dari dropdown (opsional)
-      if ($request->team)   $q->where('c.team', $request->team);
-      if ($request->status) $q->where('c.status', $request->status);
-      if ($request->date_from) $q->whereDate('c.started_at', '>=', $request->date_from);
-      if ($request->date_to)   $q->whereDate('c.started_at', '<=', $request->date_to);
-
-      return \Yajra\DataTables\Facades\DataTables::of($q)
-          ->addIndexColumn()
-          ->editColumn('started_at', fn($r) => $r->started_at ? date('Y-m-d H:i', strtotime($r->started_at)) : '-')
-          ->editColumn('submitted_at', fn($r) => $r->submitted_at ? date('Y-m-d H:i', strtotime($r->submitted_at)) : '-')
-          ->addColumn('lokasi', fn($r) => "{$r->nama_region} / {$r->nama_serpo} / {$r->nama_segmen}")
-          ->addColumn('action', function($r){
-              $edit = '<a href="'.route('checklists.show',$r->id).'" class="btn btn-sm btn-outline-warning mr-1">Edit</a>';
-              $detail = '<a href="'.route('checklists.show_result',$r->id).'" class="btn btn-sm btn-outline-primary mr-1">Detail</a>';
-              return $r->status == 'pending' ? $detail . $edit : $detail;
-          })
-          ->rawColumns(['action'])
-
-          // ⬇️ ini yang penting: arahkan search 'user_nama' ke 'u.nama'
-          ->filterColumn('user_nama', function($query, $keyword) {
-              $query->where('u.nama', 'like', "%{$keyword}%");
-          })
-          // (opsional) biar search global juga bisa cari region/serpo/segmen:
-          ->filterColumn('lokasi', function($query, $keyword) {
-              $query->where(function($q) use ($keyword){
-                  $q->where('r.nama_region','like',"%{$keyword}%")
-                  ->orWhere('s.nama_serpo','like',"%{$keyword}%")
-                  ->orWhere('g.nama_segmen','like',"%{$keyword}%");
-              });
-          })
-
-          ->make(true);
+        return view('bestRising.user.ceklis.index', compact('checklist','activities','items','usage'));
     }
 
-    return view('bestRising.user.ceklis.table-ceklis');
-  }
+    public function show_result(Checklist $checklist)
+    {
+        $meta = DB::table('checklists as c')
+            ->leftJoin('user_bestrising as u', 'u.id_userBestrising', '=', 'c.user_id')
+            ->leftJoin('regions as r', 'r.id_region', '=', 'c.id_region')
+            ->leftJoin('serpos  as s', 's.id_serpo',   '=', 'c.id_serpo')
+            ->leftJoin('segmens as g', 'g.id_segmen',  '=', 'c.id_segmen')
+            ->where('c.id', $checklist->id)
+            ->select([
+                'c.*','u.nama as user_nama','r.nama_region','s.nama_serpo','g.nama_segmen'
+            ])->first();
 
-  // API dropdown
-  public function serpoByRegion($id_region)
-  {
-    return Serpo::where('id_region',$id_region)
-      ->orderBy('nama_serpo')
-      ->get(['id_serpo as id','nama_serpo as text']);
-  }
+        // items (aktivitas yang diceklis)
+        $items = ActivityResult::with('activity')
+            ->where('checklist_id', $checklist->id)
+            ->orderByDesc('submitted_at')
+            ->get();
 
-  public function segmenBySerpo($id_serpo)
-  {
-    return Segmen::where('id_serpo',$id_serpo)
-      ->orderBy('nama_segmen')
-      ->get(['id_segmen as id','nama_segmen as text']);
-  }
+        return view('bestRising.user.ceklis.show', compact('checklist','meta','items'));
+    }
+
+  // Selesai sesi: hitung total
+    public function finish(Request $req, Checklist $checklist)
+    {
+        $total = ActivityResult::where('checklist_id', $checklist->id)->sum('point_earned');
+        $checklist->update([
+        'status'       => 'completed',
+        'submitted_at' => now(),
+        'total_point'  => $total,
+        ]);
+        return back()->with('success', 'Checklist selesai. Total poin: '.$total);
+    }
+
+    public function tableCeklis(Request $request) 
+    {
+        
+        if ($request->ajax()) {
+        $currentUser = $request->session()->get('auth_user');
+
+        $q = \DB::table('checklists as c')
+            ->leftJoin('user_bestrising as u', 'u.id_userBestrising', '=', 'c.user_id')
+            ->leftJoin('regions as r', 'r.id_region', '=', 'c.id_region')
+            ->leftJoin('serpos  as s', 's.id_serpo',   '=', 'c.id_serpo')
+            ->leftJoin('segmens as g', 'g.id_segmen',  '=', 'c.id_segmen')
+            ->select([
+                'c.id','c.team','c.status','c.total_point','c.started_at','c.submitted_at',
+                'u.nama as user_nama',
+                'r.nama_region','s.nama_serpo','g.nama_segmen',
+            ])
+            ->where('user_id', $currentUser['id'])
+            ->orderByDesc('c.id');
+
+        // filter custom dari dropdown (opsional)
+        if ($request->team)   $q->where('c.team', $request->team);
+        if ($request->status) $q->where('c.status', $request->status);
+        if ($request->date_from) $q->whereDate('c.started_at', '>=', $request->date_from);
+        if ($request->date_to)   $q->whereDate('c.started_at', '<=', $request->date_to);
+
+        return \Yajra\DataTables\Facades\DataTables::of($q)
+            ->addIndexColumn()
+            ->editColumn('started_at', fn($r) => $r->started_at ? date('Y-m-d H:i', strtotime($r->started_at)) : '-')
+            ->editColumn('submitted_at', fn($r) => $r->submitted_at ? date('Y-m-d H:i', strtotime($r->submitted_at)) : '-')
+            ->addColumn('lokasi', fn($r) => "{$r->nama_region} / {$r->nama_serpo}")
+            ->addColumn('action', function($r){
+                $edit = '<a href="'.route('checklists.show',$r->id).'" class="btn btn-sm btn-outline-warning mr-1">Edit</a>';
+                $detail = '<a href="'.route('checklists.show_result',$r->id).'" class="btn btn-sm btn-outline-primary mr-1">Detail</a>';
+                return $r->status == 'pending' ? $detail . $edit : $detail;
+            })
+            ->rawColumns(['action'])
+
+            // ⬇️ ini yang penting: arahkan search 'user_nama' ke 'u.nama'
+            ->filterColumn('user_nama', function($query, $keyword) {
+                $query->where('u.nama', 'like', "%{$keyword}%");
+            })
+            // (opsional) biar search global juga bisa cari region/serpo/segmen:
+            ->filterColumn('lokasi', function($query, $keyword) {
+                $query->where(function($q) use ($keyword){
+                    $q->where('r.nama_region','like',"%{$keyword}%")
+                    ->orWhere('s.nama_serpo','like',"%{$keyword}%")
+                    ->orWhere('g.nama_segmen','like',"%{$keyword}%");
+                });
+            })
+
+            ->make(true);
+        }
+
+        return view('bestRising.user.ceklis.table-ceklis');
+    }
+
+    // API dropdown
+    public function serpoByRegion($id_region)
+    {
+        return Serpo::where('id_region',$id_region)
+        ->orderBy('nama_serpo')
+        ->get(['id_serpo as id','nama_serpo as text']);
+    }
+
+    public function segmenBySerpo($id_serpo)
+    {
+        return Segmen::where('id_serpo',$id_serpo)
+        ->orderBy('nama_segmen')
+        ->get(['id_segmen as id','nama_segmen as text']);
+    }
 
     public function segmenByRegion($id_serpo)
     {

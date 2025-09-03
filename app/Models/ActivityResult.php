@@ -13,11 +13,10 @@ class ActivityResult extends Model
         'id_segmen',
         'submitted_at',
         'status',
-        'before_photo',
-        'after_photo',
         'point_earned',
         'note',
     ];
+    
     public function activity()
     {
         return $this->belongsTo(Activity::class);
@@ -36,5 +35,20 @@ class ActivityResult extends Model
 
     public function segmen() {
         return $this->belongsTo(Segmen::class, 'id_segmen');
+    }
+
+    public function photos()
+    {
+        return $this->hasMany(ActivityResultPhoto::class, 'activity_result_id');
+    }
+
+    public function beforePhotos()
+    {
+        return $this->photos()->where('kind','before');
+    }
+
+    public function afterPhotos()
+    {
+        return $this->photos()->where('kind','after');
     }
 }

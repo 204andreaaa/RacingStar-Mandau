@@ -46,8 +46,6 @@ Route::middleware('manual.auth')->group(function () {
     Route::get('/teknisi/ceklis/result/{checklist}', [ChecklistController::class,'show_result'])->name('checklists.show_result');
     // Tambah item aktivitas
     Route::post('/teknisi/ceklis/{checklist}/item', [ActivityResultController::class,'store'])->name('checklists.item.store');
-    // Tambah item bulk
-    Route::post('/teknisi/ceklis/{checklist}/bulk', [ActivityResultController::class,'bulkStore'])->name('checklists.item.bulkStore');
     // Selesai sesi (hitung total)
     Route::post('/teknisi/ceklis/{checklist}/finish', [ChecklistController::class,'finish'])->name('checklists.finish');
 
