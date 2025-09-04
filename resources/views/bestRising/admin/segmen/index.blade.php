@@ -219,6 +219,26 @@ $(function(){
     $('#modalSegmen').modal('show');
   });
 
+  $('#form_region').on('change', function () {
+    loadSerpoByRegion(this.value, $('#form_serpo'));
+  });
+
+  // 2) Saat klik "Tambah Segmen"
+  $('#btnAdd').on('click', function(){
+    $('#modalTitle').text('Tambah Segmen');
+    $('#formSegmen')[0].reset();
+    $('#id_segmen').val('');
+    $('#form_serpo').empty().append('<option value="">-- Pilih Serpo --</option>');
+
+    // kalau region sudah keburu terisi (mis. default/terakhir dipilih), isi serpo sekarang
+    const rid = $('#form_region').val();
+    if (rid) {
+      loadSerpoByRegion(rid, $('#form_serpo'));
+    }
+
+    $('#modalSegmen').modal('show');
+  });                                                   
+
   // Edit single
   $(document).on('click','.btn-edit', function(){
     $('#modalTitle').text('Edit Segmen');

@@ -33,6 +33,7 @@
           <label class="form-label mb-1">Segmen</label>
           <select id="f_segmen" class="form-control">
             <option value="">Semua</option>
+            <option value="0">Tanpa Segmen</option>
           </select>
         </div>
 

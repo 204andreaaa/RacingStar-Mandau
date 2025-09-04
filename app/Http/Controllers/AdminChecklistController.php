@@ -17,6 +17,7 @@ class AdminChecklistController extends Controller
     public function allresult(Request $request)
     {
         if ($request->ajax()) {
+            // Subquery foto
             $beforeListSub = DB::table('activity_result_photos')
                 ->selectRaw('activity_result_id, GROUP_CONCAT(path ORDER BY id ASC SEPARATOR "|") as before_list')
                 ->where('kind', 'before')
@@ -43,34 +44,42 @@ class AdminChecklistController extends Controller
                     DB::raw('COALESCE(r.nama_region, "-") as region_nama'),
                     DB::raw('COALESCE(sp.nama_serpo, "-") as serpo_nama'),
                     DB::raw('COALESCE(sg.nama_segmen, "-") as segmen_nama'),
+                    DB::raw('sg.id_segmen as segmen_id'), // ← ikutkan id segmen buat debug/keperluan lain
                     DB::raw('bfl.before_list'),
                     DB::raw('afl.after_list'),
                 ]);
 
+            // === FILTERS ===
             if ($request->filled('region')) $q->where('u.id_region', (int) $request->region);
             if ($request->filled('serpo'))  $q->where('u.id_serpo',  (int) $request->serpo);
+
+            // SEGMENT: mode strict
             if ($request->filled('segmen')) {
-                $segmenId = (int) $request->segmen;
-                $q->whereExists(function ($sub) use ($segmenId) {
-                    $sub->from('segmen_user_bestrising as p')
-                        ->whereColumn('p.id_userBestrising', 'u.id_userBestrising')
-                        ->where('p.id_segmen', $segmenId);
-                });
+                $segmenVal = (int) $request->segmen;
+                if ($segmenVal === 0) {
+                    // Opsional: kalau di dropdown kamu sediakan "Tanpa Segmen" (value 0)
+                    $q->whereNull('ar.id_segmen');
+                } else {
+                    // STRICT: hanya baris yang memang punya id segmen tsb
+                    $q->where('ar.id_segmen', $segmenVal);
+                }
             }
+
             if ($request->filled('date_from') || $request->filled('date_to')) {
                 $from = $request->date_from; $to = $request->date_to;
                 if ($from && $to) $q->whereBetween(DB::raw('DATE(ar.submitted_at)'), [$from, $to]);
                 elseif ($from)   $q->whereDate('ar.submitted_at', '>=', $from);
                 elseif ($to)     $q->whereDate('ar.submitted_at', '<=', $to);
             }
+
             if ($request->filled('keyword')) {
                 $kw = '%'.$request->keyword.'%';
                 $q->where(function ($w) use ($kw) {
                     $w->where('u.nama','like',$kw)
-                      ->orWhere('u.email','like',$kw)
-                      ->orWhere('act.name','like',$kw)
-                      ->orWhere('r.nama_region','like',$kw)
-                      ->orWhere('sp.nama_serpo','like',$kw);
+                    ->orWhere('u.email','like',$kw)
+                    ->orWhere('act.name','like',$kw)
+                    ->orWhere('r.nama_region','like',$kw)
+                    ->orWhere('sp.nama_serpo','like',$kw);
                 });
             }
 
@@ -114,6 +123,7 @@ class AdminChecklistController extends Controller
 
         return view('bestRising.admin.checklists.allresult');
     }
+
 
     public function exportAllResult(Request $request)
     {
