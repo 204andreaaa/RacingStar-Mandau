@@ -66,7 +66,7 @@
               <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                   <h5 class="mb-1">{{ $i+1 }}. {{ $a->name }}</h5>
-                  @if($a->description) <p class="small text-muted mb-1">{{ $a->description }}</p> @endif
+                  @if($a->description) <p class="small text-muted mb-1" style="white-space: pre-line;">{{ $a->description }}</p> @endif
 
                   <span class="badge bg-info">{{ $a->point }} Star</span>
                   @if($period !== 'none')

@@ -25,7 +25,7 @@
             <th style="width:60px">#</th>
             <th>Team</th>
             <th>Nama</th>
-            <th class="text-end">Point</th>
+            <th class="text-end">Star</th>
             <th>Status</th>
             <th>Segmen</th>
             <th style="width:160px">Aksi</th>
@@ -73,7 +73,7 @@
         <div class="row">
           <div class="col-md-6">
             <div class="form-group mb-2">
-              <label>Point</label>
+              <label>Star</label>
               <input type="number" name="point" id="point" class="form-control" min="0" value="0" required>
             </div>
           </div>
