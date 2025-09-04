@@ -15,6 +15,7 @@ class Activity extends Model
         'is_checked_segmen',
         'limit_period', // ⟵ TAMBAH
         'limit_quota',  // ⟵ TAMBAH
+        'requires_photo',
     ];
 
     protected $casts = [
@@ -23,5 +24,6 @@ class Activity extends Model
         'is_active'    => 'boolean',
         'is_checked_segmen'    => 'boolean',
         'limit_quota'  => 'integer',
+        'requires_photo'     => 'boolean',
     ];
 }

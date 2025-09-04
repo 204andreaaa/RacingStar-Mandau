@@ -36,7 +36,8 @@ class ActivityController extends Controller
                             data-active="'.($r->is_active?1:0).'"
                             data-is_checked_segmen="'.($r->is_checked_segmen?1:0).'"
                             data-limit_period="'.e($r->limit_period ?? 'none').'"
-                            data-limit_quota="'.(int)($r->limit_quota ?? 1).'">Edit</button>
+                            data-limit_quota="'.(int)($r->limit_quota ?? 1).'"
+                            data-requires_photo="'.($r->requires_photo?1:0).'">Edit</button>
                         <button type="button" class="btn btn-sm btn-danger btn-delete"
                             data-id="'.$r->id.'">Hapus</button>
                     ';
@@ -44,7 +45,6 @@ class ActivityController extends Controller
                 ->rawColumns(['action'])
                 ->make(true);
         }
-
 
         return view('bestRising.admin.aktifitas.index', [
             'teams' => $this->teams,
@@ -62,6 +62,7 @@ class ActivityController extends Controller
             'is_checked_segmen' => ['required'],
             'limit_period' => ['required','in:none,daily,weekly,monthly'],
             'limit_quota'  => ['required','integer','min:1'],
+            'requires_photo' => ['nullable','boolean'], // ⟵ TAMBAH
         ]);
 
         Activity::create($data);
@@ -79,6 +80,7 @@ class ActivityController extends Controller
             'is_checked_segmen' => ['required'],
             'limit_period' => ['required','in:none,daily,weekly,monthly'],
             'limit_quota'  => ['required','integer','min:1'],
+            'requires_photo' => ['nullable','boolean'], // ⟵ TAMBAH
         ]);
 
         $activity->update($data);

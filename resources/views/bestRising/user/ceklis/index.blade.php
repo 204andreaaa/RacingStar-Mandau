@@ -28,22 +28,17 @@
         @php
           $already = isset($items) ? $items->firstWhere('activity_id', $a->id) : null;
           $isDone  = $already && $already->status === 'done';
-          $beforeCount  = $already?->beforePhotos->count() ?? 0;
-          $afterCount   = $already?->afterPhotos->count()  ?? 0;
+
+          // ← activity ini butuh foto atau tidak? (dari DB)
+          $needPhoto = (bool) ($a->requires_photo ?? false);
 
           $period = $a->limit_period ?? 'none';
           $u = $usage[$a->id] ?? [
-            'used'    => 0,
-            'max'     => $period !== 'none' ? (int)($a->limit_quota ?? 1) : null,
-            'blocked' => false,
-            'label'   => match($period) {
-              'daily' => 'Hari ini',
-              'weekly' => 'Minggu ini',
-              'monthly' => 'Bulan ini',
-              default => 'Tidak dibatasi',
-            },
+            'used'=>0,
+            'max' => $period !== 'none' ? (int)($a->limit_quota ?? 1) : null,
+            'blocked'=>false,
+            'label'=> match($period){ 'daily'=>'Hari ini','weekly'=>'Minggu ini','monthly'=>'Bulan ini', default=>'Tidak dibatasi' },
           ];
-
           $used    = (int)($u['used'] ?? 0);
           $max     = $u['max'];                 // null = tidak dibatasi
           $blocked = (bool)($u['blocked'] ?? false);
@@ -62,11 +57,14 @@
                   @if($a->description) <p class="small text-muted mb-1">{{ $a->description }}</p> @endif
 
                   <span class="badge bg-info">{{ $a->point }} Star</span>
-                  @if(($a->limit_period ?? 'none') !== 'none')
+                  @if($period !== 'none')
                     <span class="badge bg-light text-dark ms-1">{{ $label }}: {{ $used }}/{{ $max }}</span>
                   @else
                     <span class="badge bg-light text-dark ms-1">Tidak dibatasi</span>
                   @endif
+                  @unless($needPhoto)
+                    <span class="badge bg-secondary ms-1">Tanpa Foto</span>
+                  @endunless
                   @if($already)       <span class="badge bg-success ms-1">Tersimpan</span> @endif
                   @if($shouldDisable) <span class="badge bg-danger ms-1">Penuh</span>     @endif
                 </div>
@@ -76,7 +74,7 @@
                     <input type="checkbox"
                           class="form-check-input toggle-done"
                           name="status[{{ $a->id }}]"
-                          data-period="{{ $a->limit_period ?? 'none' }}"
+                          data-period="{{ $period }}"
                           data-used="{{ $used }}"
                           data-max="{{ $max === null ? '' : $max }}"
                           @if($isDone) checked @endif
@@ -91,52 +89,55 @@
               @if ((($max - $used != 0) || $used == 0) || $isDone)
                 <fieldset class="activity-fields">
                   <div class="row g-3">
-                    <div class="col-md-6">
-                      <label class="form-label fw-semibold">Foto Before <small class="text-muted">(maks 3)</small></label>
-                      <div class="d-flex gap-2 align-items-start flex-wrap">
-                        @if($already && $already->beforePhotos->count())
-                          @foreach($already->beforePhotos as $pf)
-                            @php $url = Storage::disk('public')->url($pf->path); @endphp
-                            <a href="{{ $url }}" target="_blank">
-                              <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="before">
-                            </a>
-                          @endforeach
-                        @else
-                          <span class="text-muted small">Belum ada foto.</span>
-                        @endif
-                      </div>
-                      <input type="file"
-                            name="before_photo[{{ $a->id }}][]"
-                            class="form-control mt-2 limit-3"
-                            data-max="3"
-                            multiple
-                            accept="image/*">
-                      <small class="text-muted">Pilih hingga 3 foto. Mengunggah baru akan mengganti set lama.</small>
-                    </div>
 
-                    <div class="col-md-6">
-                      <label class="form-label fw-semibold">Foto After <small class="text-muted">(maks 3)</small></label>
-                      <div class="d-flex gap-2 align-items-start flex-wrap">
-                        @if($already && $already->afterPhotos->count())
-                          @foreach($already->afterPhotos as $pf)
-                            @php $url = Storage::disk('public')->url($pf->path); @endphp
-                            <a href="{{ $url }}" target="_blank">
-                              <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="after">
-                            </a>
-                          @endforeach
-                        @else
-                          <span class="text-muted small">Belum ada foto.</span>
-                        @endif
+                    @if ($needPhoto)
+                      {{-- ===== FOTO BEFORE ===== --}}
+                      <div class="col-md-6">
+                        <label class="form-label fw-semibold">Foto Before <small class="text-muted">(maks 3)</small></label>
+                        <div class="d-flex gap-2 align-items-start flex-wrap">
+                          @if($already && $already->beforePhotos->count())
+                            @foreach($already->beforePhotos as $pf)
+                              @php $url = Storage::disk('public')->url($pf->path); @endphp
+                              <a href="{{ $url }}" target="_blank">
+                                <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="before">
+                              </a>
+                            @endforeach
+                          @else
+                            <span class="text-muted small">Belum ada foto.</span>
+                          @endif
+                        </div>
+                        <input type="file" name="before_photo[{{ $a->id }}][]" class="form-control mt-2 limit-3" data-max="3" multiple accept="image/*">
+                        <small class="text-muted">Pilih hingga 3 foto. Mengunggah baru akan mengganti set lama.</small>
                       </div>
-                      <input type="file"
-                            name="after_photo[{{ $a->id }}][]"
-                            class="form-control mt-2 limit-3"
-                            data-max="3"
-                            multiple
-                            accept="image/*">
-                      <small class="text-muted">Pilih hingga 3 foto. Mengunggah baru akan mengganti set lama.</small>
-                    </div>
 
+                      {{-- ===== FOTO AFTER ===== --}}
+                      <div class="col-md-6">
+                        <label class="form-label fw-semibold">Foto After <small class="text-muted">(maks 3)</small></label>
+                        <div class="d-flex gap-2 align-items-start flex-wrap">
+                          @if($already && $already->afterPhotos->count())
+                            @foreach($already->afterPhotos as $pf)
+                              @php $url = Storage::disk('public')->url($pf->path); @endphp
+                              <a href="{{ $url }}" target="_blank">
+                                <img src="{{ $url }}" class="img-thumbnail rounded border" width="90" alt="after">
+                              </a>
+                            @endforeach
+                          @else
+                            <span class="text-muted small">Belum ada foto.</span>
+                          @endif
+                        </div>
+                        <input type="file" name="after_photo[{{ $a->id }}][]" class="form-control mt-2 limit-3" data-max="3" multiple accept="image/*">
+                        <small class="text-muted">Pilih hingga 3 foto. Mengunggah baru akan mengganti set lama.</small>
+                      </div>
+                    @else
+                      {{-- Aktivitas ini tidak memerlukan foto --}}
+                      <div class="col-12">
+                        <div class="alert alert-secondary py-2 small mb-0">
+                          Aktivitas ini <strong>tidak memerlukan</strong> foto before/after.
+                        </div>
+                      </div>
+                    @endif
+
+                    {{-- Catatan & Segmen tetap --}}
                     <div class="col-12">
                       <label class="form-label fw-semibold">Catatan/Lokasi</label>
                       <textarea name="note[{{ $a->id }}]" class="form-control" rows="2" placeholder="opsional">{{ $already->note ?? '' }}</textarea>
@@ -152,7 +153,6 @@
                           name="id_segmen[{{ $a->id }}]"
                           id="id_segmen_{{ $a->id }}"
                           class="form-control br-control segmen-select"
-                          {{-- data-selected="{{ $already->id_segmen ?? '' }}" --}}
                           data-selected="{{ old('id_segmen.'.$a->id, $already->id_segmen ?? '') }}"
                           required>
                           <option value="">— pilih segmen —</option>
@@ -160,6 +160,7 @@
                         <small class="text-muted">Daftar segmen mengikuti region dari Serpo.</small>
                       </div>
                     @endif
+
                   </div>
                 </fieldset>
               @endif
@@ -189,14 +190,12 @@
 </style>
 
 <script>
-// INIT: pasang state awal via JS (bukan dari HTML)
 document.addEventListener('DOMContentLoaded', function(){
   document.querySelectorAll('.activity-card').forEach(function(card){
     const cb = card.querySelector('.toggle-done');
     const fs = card.querySelector('.activity-fields');
     if (!cb || !fs) return;
 
-    // atur state awal
     const enable = cb.checked && !cb.disabled;
     if (enable) {
       fs.removeAttribute('disabled');
@@ -207,7 +206,6 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
 
-  // Batasi input multiple max N file dari depan
   document.addEventListener('change', function (e) {
     const el = e.target;
     if (!el.matches('input[type="file"].limit-3')) return;
@@ -225,19 +223,17 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
 
-  // get segmen by region
   const sess_serpo   = @json($checklist->id_serpo ?? '');
   const routeSegmenByRegion = rid => "{{ route('api.segmen.byRegion', ':rid') }}".replace(':rid', rid);
 
   function resetSelect($el, placeholder) {
     $el.empty().append(new Option(placeholder, ''));
-    // kalau pakai select2:
     if ($el.data('select2')) $el.val('').trigger('change.select2');
   }
 
   function fillSegmen(rows) {
-    const $single = $('#id_segmen');                 // single
-    const $many   = $('select.segmen-select');       // multiple
+    const $single = $('#id_segmen');
+    const $many   = $('select.segmen-select');
 
     if ($many.length) {
       $many.each(function () {
@@ -264,12 +260,10 @@ document.addEventListener('DOMContentLoaded', function(){
     resetSelect($('#id_segmen'), '— pilih segmen —');
     $('select.segmen-select').each(function(){ resetSelect($(this), '— pilih segmen —'); });
 
-    // preload SEGMEN list (by region) + pilih sess_segmen jika kamu set data-selected di elemen
     $.get(routeSegmenByRegion(sess_serpo))
       .done(rows => fillSegmen(rows))
       .fail(() => alert('Gagal memuat data Segmen (preload).'));
   }
-
 });
 </script>
 @endsection

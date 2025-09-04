@@ -124,6 +124,17 @@
           </div>
         </div>
 
+        {{-- ===== BARU: WAJIB FOTO ===== --}}
+        <div class="form-group mb-2">
+          <div class="form-check">
+            {{-- hidden 0 supaya uncheck tetap terkirim --}}
+            <input type="hidden" name="requires_photo" value="0">
+            <input type="checkbox" class="form-check-input" id="requires_photo" name="requires_photo" value="1">
+            <label class="form-check-label" for="requires_photo">Wajib Foto (Before & After)</label>
+          </div>
+          <small class="text-muted">Jika dicentang, user harus upload foto before & after saat menandai <em>Done</em>.</small>
+        </div>
+
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-light" data-dismiss="modal">Batal</button>
@@ -139,49 +150,39 @@ $(function(){
   // Init ulang setiap modal dibuka
   $('#modalAktifitas').on('shown.bs.modal', function () {
     $(this).find('select.select2').each(function () {
-      // Cek ini BELUM di-init? (indikator: belum punya class 'select2-hidden-accessible')
       if (!$(this).hasClass('select2-hidden-accessible')) {
-        $(this).select2({
-          dropdownParent: $('#modalAktifitas'),
-          width: '100%'
-        });
+        $(this).select2({ dropdownParent: $('#modalAktifitas'), width: '100%' });
       }
     });
   });
 
-  // Destroy hanya yang SUDAH di-init saat modal ditutup
+  // Destroy yang SUDAH di-init saat modal ditutup
   $('#modalAktifitas').on('hidden.bs.modal', function () {
     const $form = $('#formAktifitas');
-
-    // Penting: destroy dulu, baru reset form (biar DOM Select2 tidak hilang sebelum destroy)
     $(this).find('select.select2').each(function () {
       if ($(this).hasClass('select2-hidden-accessible')) {
-        $(this).select2('destroy'); // aman karena sudah dicek
+        $(this).select2('destroy');
       }
     });
-
-    // Baru reset form kalau perlu
     if ($form.length && $form[0]) $form[0].reset();
+    // pastikan checkbox kembali default (off)
+    $('#requires_photo').prop('checked', false);
   });
   
-  // CSRF untuk semua AJAX
   $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
 
   const ROUTES = {
     index  : "{{ route('admin.aktifitas.index') }}",
     store  : "{{ route('admin.aktifitas.store') }}",
     update : "{{ route('admin.aktifitas.update', ['activity' => '__ID__']) }}",
-    destroy: "{{ route('admin.aktifitas.destroy', ['activity' => '__ID__']) }}", // ← param harus 'activity'
+    destroy: "{{ route('admin.aktifitas.destroy', ['activity' => '__ID__']) }}",
   };
   const urlUpdate  = id => ROUTES.update.replace('__ID__', encodeURIComponent(id));
   const urlDestroy = id => ROUTES.destroy.replace('__ID__', encodeURIComponent(id));
 
   const table = $('#table-aktifitas').DataTable({
     processing:true, serverSide:true,
-    ajax:{
-      url: ROUTES.index,
-      data: function(d){ d.team = $('#f_team').val(); }
-    },
+    ajax:{ url: ROUTES.index, data: d => { d.team = $('#f_team').val(); } },
     order:[[2,'asc']],
     columns: [
       {data:'DT_RowIndex', orderable:false, searchable:false},
@@ -203,6 +204,7 @@ $(function(){
     $('#id_row').val('');
     $('#limit_period').val('none');
     $('#limit_quota').val(1);
+    $('#requires_photo').prop('checked', false); // default off
     const tf = $('#f_team').val(); if(tf) $('#team_id').val(tf);
     $('#modalAktifitas').modal('show');
   });
@@ -220,6 +222,7 @@ $(function(){
     $('#is_checked_segmen').val(String($(this).data('is_checked_segmen'))).trigger('change');
     $('#limit_period').val($(this).data('limit_period') || 'none');
     $('#limit_quota').val($(this).data('limit_quota') || 1);
+    $('#requires_photo').prop('checked', String($(this).data('requires_photo')) === '1'); // ⟵ BARU
     $('#modalAktifitas').modal('show');
   });
 

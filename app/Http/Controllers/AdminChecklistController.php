@@ -16,12 +16,25 @@ class AdminChecklistController extends Controller
     public function allresult(Request $request)
     {
         if ($request->ajax()) {
+            // Kumpulkan semua foto per activity_result: before & after
+            $beforeListSub = DB::table('activity_result_photos')
+                ->selectRaw('activity_result_id, GROUP_CONCAT(path ORDER BY id ASC SEPARATOR "|") as before_list')
+                ->where('kind', 'before')
+                ->groupBy('activity_result_id');
+
+            $afterListSub = DB::table('activity_result_photos')
+                ->selectRaw('activity_result_id, GROUP_CONCAT(path ORDER BY id ASC SEPARATOR "|") as after_list')
+                ->where('kind', 'after')
+                ->groupBy('activity_result_id');
+
             $q = DB::table('activity_results as ar')
                 ->leftJoin('user_bestrising as u', 'u.id_userBestrising', '=', 'ar.user_id')
                 ->leftJoin('regions as r', 'r.id_region', '=', 'u.id_region')
                 ->leftJoin('serpos as sp', 'sp.id_serpo', '=', 'u.id_serpo')
                 ->leftJoin('segmens as sg', 'sg.id_segmen', '=', 'ar.id_segmen')
-                ->leftJoin('activities as act', 'act.id', '=', 'ar.activity_id') // schema kamu: id & name
+                ->leftJoin('activities as act', 'act.id', '=', 'ar.activity_id')
+                ->leftJoinSub($beforeListSub, 'bfl', 'bfl.activity_result_id', '=', 'ar.id')
+                ->leftJoinSub($afterListSub,  'afl', 'afl.activity_result_id', '=', 'ar.id')
                 ->select([
                     // hidden di UI
                     'ar.id',
@@ -30,8 +43,6 @@ class AdminChecklistController extends Controller
 
                     // visible
                     'ar.status',
-                    'ar.before_photo',
-                    'ar.after_photo',
                     'ar.point_earned',
                     'ar.note',
                     'ar.created_at',
@@ -42,90 +53,109 @@ class AdminChecklistController extends Controller
                     DB::raw('COALESCE(r.nama_region, "-") as region_nama'),
                     DB::raw('COALESCE(sp.nama_serpo, "-") as serpo_nama'),
                     DB::raw('COALESCE(sg.nama_segmen, "-") as segmen_nama'),
+
+                    // list foto (akan dirender di 2 kolom terpisah)
+                    DB::raw('bfl.before_list'),
+                    DB::raw('afl.after_list'),
                 ]);
 
             // ================= FILTERS =================
-            // region
-            $q->when($request->filled('region'), function ($qq) use ($request) {
-                $qq->where('u.id_region', (int) $request->region);
-            });
-
-            // serpo
-            $q->when($request->filled('serpo'), function ($qq) use ($request) {
-                $qq->where('u.id_serpo', (int) $request->serpo);
-            });
-
-            // segmen via pivot
-            $q->when($request->filled('segmen'), function ($qq) use ($request) {
+            if ($request->filled('region')) {
+                $q->where('u.id_region', (int) $request->region);
+            }
+            if ($request->filled('serpo')) {
+                $q->where('u.id_serpo', (int) $request->serpo);
+            }
+            if ($request->filled('segmen')) {
                 $segmenId = (int) $request->segmen;
-                $qq->whereExists(function ($sub) use ($segmenId) {
+                $q->whereExists(function ($sub) use ($segmenId) {
                     $sub->from('segmen_user_bestrising as p')
                         ->whereColumn('p.id_userBestrising', 'u.id_userBestrising')
                         ->where('p.id_segmen', $segmenId);
                 });
-            });
-
-            // tanggal (submitted_at: YYYY-MM-DD)
-            $q->when($request->filled('date_from') || $request->filled('date_to'), function ($qq) use ($request) {
+            }
+            if ($request->filled('date_from') || $request->filled('date_to')) {
                 $from = $request->date_from;
                 $to   = $request->date_to;
                 if ($from && $to) {
-                    $qq->whereBetween(DB::raw('DATE(ar.submitted_at)'), [$from, $to]);
+                    $q->whereBetween(DB::raw('DATE(ar.submitted_at)'), [$from, $to]);
                 } elseif ($from) {
-                    $qq->whereDate('ar.submitted_at', '>=', $from);
+                    $q->whereDate('ar.submitted_at', '>=', $from);
                 } elseif ($to) {
-                    $qq->whereDate('ar.submitted_at', '<=', $to);
+                    $q->whereDate('ar.submitted_at', '<=', $to);
                 }
-            });
-
-            // keyword (nama/email user)
-            $q->when($request->filled('keyword'), function ($qq) use ($request) {
+            }
+            if ($request->filled('keyword')) {
                 $kw = '%'.$request->keyword.'%';
-                $qq->where(function ($w) use ($kw) {
-                    $w->where('u.nama', 'like', $kw)
-                    ->orWhere('u.email', 'like', $kw);
+                $q->where(function ($w) use ($kw) {
+                    $w->where('u.nama','like',$kw)
+                      ->orWhere('u.email','like',$kw)
+                      ->orWhere('act.name','like',$kw)
+                      ->orWhere('r.nama_region','like',$kw)
+                      ->orWhere('sp.nama_serpo','like',$kw);
                 });
-            });
+            }
             // =============== END FILTERS ===============
 
+            $q->orderByDesc('ar.created_at');
+
             return DataTables::of($q)
-            ->addIndexColumn()
+                ->addIndexColumn()
 
-            // --- mapping search untuk alias ---
-            ->filterColumn('user_nama', function ($query, $keyword) {
-                $kw = '%'.$keyword.'%';
-                $query->where(function($w) use ($kw){
-                    $w->where('u.nama', 'like', $kw)
-                    ->orWhere('u.email', 'like', $kw);
-                });
-            })
-            ->filterColumn('activity_nama', function ($query, $keyword) {
-                $query->where('act.name', 'like', '%'.$keyword.'%');
-            })
-            ->filterColumn('region_nama', function ($query, $keyword) {
-                $query->where('r.nama_region', 'like', '%'.$keyword.'%');
-            })
-            ->filterColumn('serpo_nama', function ($query, $keyword) {
-                $query->where('sp.nama_serpo', 'like', '%'.$keyword.'%');
-            })
-            // kalau mau ikut cari di created_at (string), boleh tambah ini:
-            // ->filterColumn('created_at', function ($query, $keyword) {
-            //     $query->where('ar.created_at', 'like', '%'.$keyword.'%');
-            // })
+                // mapping search untuk alias
+                ->filterColumn('user_nama', function ($query, $keyword) {
+                    $kw = '%'.$keyword.'%';
+                    $query->where(function($w) use ($kw){
+                        $w->where('u.nama', 'like', $kw)
+                          ->orWhere('u.email', 'like', $kw);
+                    });
+                })
+                ->filterColumn('activity_nama', function ($query, $keyword) {
+                    $query->where('act.name', 'like', '%'.$keyword.'%');
+                })
+                ->filterColumn('region_nama', function ($query, $keyword) {
+                    $query->where('r.nama_region', 'like', '%'.$keyword.'%');
+                })
+                ->filterColumn('serpo_nama', function ($query, $keyword) {
+                    $query->where('sp.nama_serpo', 'like', '%'.$keyword.'%');
+                })
 
-            ->editColumn('created_at', fn($r) => $r->created_at ? \Carbon\Carbon::parse($r->created_at)->format('Y-m-d H:i:s') : '-')
-            ->editColumn('before_photo', function ($r) {
-                if (!$r->before_photo) return '-';
-                $url = asset('storage/' . ltrim($r->before_photo, '/'));
-                return '<a href="'.$url.'" target="_blank"><img src="'.$url.'" class="thumb-img" alt="before"></a>';
-            })
-            ->editColumn('after_photo', function ($r) {
-                if (!$r->after_photo) return '-';
-                $url = asset('storage/' . ltrim($r->after_photo, '/'));
-                return '<a href="'.$url.'" target="_blank"><img src="'.$url.'" class="thumb-img" alt="after"></a>';
-            })
-            ->rawColumns(['before_photo','after_photo'])
-            ->make(true);
+                ->editColumn('created_at', fn($r) => $r->created_at ? \Carbon\Carbon::parse($r->created_at)->format('Y-m-d H:i:s') : '-')
+
+                // Kolom BEFORE
+                ->addColumn('before_photos', function ($r) {
+                    if (!$r->before_list) return '-';
+                    $pieces = [];
+                    foreach (explode('|', $r->before_list) as $path) {
+                        if (!$path) continue;
+                        $url = asset('storage/' . ltrim($path,'/'));
+                        $pieces[] =
+                            '<a href="'.$url.'" target="_blank" class="photo-item" title="Before">'.
+                              '<img src="'.$url.'" class="thumb-img" alt="before">'.
+                              '<span class="photo-badge">B</span>'.
+                            '</a>';
+                    }
+                    return '<div class="photo-scroller">'.$pieces[0].implode('', array_slice($pieces,1)).'</div>';
+                })
+
+                // Kolom AFTER
+                ->addColumn('after_photos', function ($r) {
+                    if (!$r->after_list) return '-';
+                    $pieces = [];
+                    foreach (explode('|', $r->after_list) as $path) {
+                        if (!$path) continue;
+                        $url = asset('storage/' . ltrim($path,'/'));
+                        $pieces[] =
+                            '<a href="'.$url.'" target="_blank" class="photo-item" title="After">'.
+                              '<img src="'.$url.'" class="thumb-img" alt="after">'.
+                              '<span class="photo-badge">A</span>'.
+                            '</a>';
+                    }
+                    return '<div class="photo-scroller">'.$pieces[0].implode('', array_slice($pieces,1)).'</div>';
+                })
+
+                ->rawColumns(['before_photos','after_photos'])
+                ->make(true);
         }
 
         return view('bestRising.admin.checklists.allresult');
@@ -142,7 +172,7 @@ class AdminChecklistController extends Controller
     {
         if ($request->ajax()) {
             $q = Checklist::query()
-                ->with(['user','region','serpo','segmen']) // <-- relasi langsung di Checklist
+                ->with(['user','region','serpo','segmen'])
                 ->when($request->team,      fn($qq) => $qq->where('team', $request->team))
                 ->when($request->status,    fn($qq) => $qq->where('status', $request->status))
                 ->when($request->date_from, fn($qq) => $qq->whereDate('started_at', '>=', $request->date_from))
@@ -162,8 +192,6 @@ class AdminChecklistController extends Controller
                 ->addColumn('action', function($row){
                     $btnShow = '<a class="btn btn-sm btn-outline-primary mr-1" href="'.route('admin.checklists.show', $row->id).'">Detail</a>';
                     $btnDel = '<button class="btn btn-sm btn-outline-danger btn-del" data-url="'.route('admin.checklists.destroy', $row->id).'">Hapus</button>';
-
-
                     return $btnShow.' '.$btnDel;
                 })
                 ->rawColumns(['action'])

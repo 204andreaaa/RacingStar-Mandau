@@ -9,6 +9,7 @@ use App\Models\Checklist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Intervention\Image\Facades\Image; // <-- ADD
 
 class ActivityResultController extends Controller
 {
@@ -34,7 +35,7 @@ class ActivityResultController extends Controller
      * Gunakan tanggal submit terakhir (submitted_at) jika ada; jika null, fallback ke created_at.
      * $excludeChecklistId dipakai saat ENFORCE di simpan supaya current checklist boleh edit ulang.
      */
-    private function quotaUsed( int $userId, int $activityId, string $period, ?int $exceptChecklistId = null ): int 
+    private function quotaUsed( int $userId, int $activityId, string $period, ?int $exceptChecklistId = null ): int
     {
         if ($period === 'none') return 0;
 
@@ -96,67 +97,53 @@ class ActivityResultController extends Controller
         return $usage;
     }
 
-    /* =========================
-     * EDIT (render form user)
-     * ========================= */
-    // public function edit(Checklist $checklist)
-    // {
-    //     // Ambil activity aktif; filter team bila tersedia di checklist
-    //     $activities = Activity::query()
-    //         ->where('is_active', true)
-    //         ->when(isset($checklist->team_id) && $checklist->team_id, fn($q) => $q->where('team_id', $checklist->team_id))
-    //         ->when((!isset($checklist->team_id) || !$checklist->team_id) && isset($checklist->team) && $checklist->team, fn($q) => $q->where('team', $checklist->team))
-    //         ->orderBy('name')
-    //         ->get(['id','name','description','limit_period','limit_quota','point']);
+    /* ======================================================
+     * NEW: Simpan gambar terkompres (≈≤1MB) ke disk 'public'
+     * ====================================================== */
+    private function saveCompressedImage(\Illuminate\Http\UploadedFile $file, string $folder): string
+    {
+        $maxBytes   = 1024 * 1024; // 1MB
+        $maxW       = 1920;
+        $maxH       = 1920;
+        $quality    = 85;  // awal
+        $minQuality = 60;  // batas bawah agar tidak terlalu pecah
 
-    //     // Item yang sudah tersimpan pada checklist ini (+ foto), lalu keyBy activity_id
-    //     $items = ActivityResult::where('checklist_id', $checklist->id)
-    //         ->with(['beforePhotos','afterPhotos'])
-    //         ->get()
-    //         ->keyBy('activity_id');
+        // Baca dan perbaiki orientasi EXIF
+        $img = Image::make($file->getRealPath())->orientate();
 
-    //     $usage = $this->usageForActivities($checklist->user_id, $activities);
+        // Resize kalau terlalu besar
+        if ($img->width() > $maxW || $img->height() > $maxH) {
+            $img->resize($maxW, $maxH, function ($c) {
+                $c->aspectRatio();
+                $c->upsize();
+            });
+        }
 
-    //     // Hitung usage/kuota untuk badge
-    //     $usage = [];
-    //     foreach ($activities as $a) {
-    //         $period = $a->limit_period ?? 'none';
+        // Encode JPG & turunkan kualitas sampai kira-kira <= 1MB
+        $img->encode('jpg', $quality);
+        while (strlen((string) $img) > $maxBytes && $quality > $minQuality) {
+            $quality -= 5;
+            $img->encode('jpg', $quality);
+        }
 
-    //         if ($period === 'none') {
-    //             $usage[$a->id] = [
-    //                 'used'    => 0,
-    //                 'max'     => null,
-    //                 'blocked' => false,
-    //                 'label'   => 'Tidak dibatasi',
-    //             ];
-    //             continue;
-    //         }
+        // Jika masih di atas 1MB, kecilkan dimensi sedikit (maks 3x)
+        $attempt = 0;
+        while (strlen((string) $img) > $maxBytes && $attempt < 3) {
+            $img->resize(
+                (int) round($img->width() * 0.9),
+                (int) round($img->height() * 0.9),
+                function ($c) { $c->aspectRatio(); $c->upsize(); }
+            )->encode('jpg', $quality);
+            $attempt++;
+        }
 
-    //         $max = max(1, (int)($a->limit_quota ?? 1));
-    //         [$start, $end, $label] = $this->periodRange($period);
+        // Simpan sebagai .jpg dengan nama unik ke folder tujuan
+        $base = pathinfo($file->hashName(), PATHINFO_FILENAME) . '.jpg';
+        $path = trim($folder, '/') . '/' . $base; // contoh: checklists/before/xxxx.jpg
+        Storage::disk('public')->put($path, (string) $img);
 
-    //         $usedAll = ActivityResult::query()
-    //             ->where('user_id', $checklist->user_id)
-    //             ->where('activity_id', $a->id)
-    //             ->where('status', 'done')
-    //             ->whereBetween(DB::raw('COALESCE(submitted_at, created_at)'), [$start, $end])
-    //             ->count();
-
-    //         $usage[$a->id] = [
-    //             'used'    => $usedAll,
-    //             'max'     => $max,
-    //             'blocked' => $usedAll >= $max,
-    //             'label'   => $label,
-    //         ];
-    //     }
-
-    //     return view('bestRising.user.ceklis.index', [
-    //         'checklist'  => $checklist,
-    //         'activities' => $activities,
-    //         'items'      => $items,  // keyed by activity_id
-    //         'usage'      => $usage,
-    //     ]);
-    // }
+        return $path;
+    }
 
     /* =========================
      * BULK STORE (form user)
@@ -252,7 +239,8 @@ class ActivityResultController extends Controller
                     $files = $req->file("before_photo.$aid");
                     foreach (array_slice($files, 0, 3) as $idx => $f) {
                         if (!$f || !$f->isValid()) continue;
-                        $path = $f->store('checklists/before', 'public');
+                        // $path = $f->store('checklists/before', 'public'); // OLD
+                        $path = $this->saveCompressedImage($f, 'checklists/before'); // NEW
                         ActivityResultPhoto::create([
                             'activity_result_id' => $record->id,
                             'kind'       => 'before',
@@ -273,7 +261,8 @@ class ActivityResultController extends Controller
                     $files = $req->file("after_photo.$aid");
                     foreach (array_slice($files, 0, 3) as $idx => $f) {
                         if (!$f || !$f->isValid()) continue;
-                        $path = $f->store('checklists/after', 'public');
+                        // $path = $f->store('checklists/after', 'public'); // OLD
+                        $path = $this->saveCompressedImage($f, 'checklists/after'); // NEW
                         ActivityResultPhoto::create([
                             'activity_result_id' => $record->id,
                             'kind'       => 'after',
@@ -319,52 +308,6 @@ class ActivityResultController extends Controller
         $activities = Activity::where('is_active', true)->orderBy('name')->get();
         return view('checklist.create', compact('activities'));
     }
-
-    // /* =========================
-    //  * Store single item (opsional)
-    //  * ========================= */
-    // public function store(Request $req, Checklist $checklist)
-    // {
-    //     $data = $req->validate([
-    //         'activity_id'  => ['required','exists:activities,id'],
-    //         'id_segmen'    => ['nullable'],
-    //         'status'       => ['required','in:done,skipped'],
-    //         'before_photo' => ['required','image','mimes:jpg,jpeg,png','max:5120'],
-    //         'after_photo'  => ['required','image','mimes:jpg,jpeg,png','max:5120'],
-    //         'note'         => ['nullable','string'],
-    //     ]);
-
-    //     $activity = Activity::findOrFail($data['activity_id']);
-
-    //     // ENFORCE LIMIT juga di endpoint single (pakai submitted_at/created_at)
-    //     $period = $activity->limit_period ?? 'none';
-    //     if ($data['status'] === 'done' && $period !== 'none') {
-    //         $quota = max(1, (int)($activity->limit_quota ?? 1));
-    //         $used  = $this->quotaUsed($checklist->user_id, $activity->id, $period, $checklist->id);
-
-    //         if ($used >= $quota) {
-    //             [, , $label] = $this->periodRange($period);
-    //             return back()->with('error', "Aktivitas '{$activity->name}' sudah mencapai batas {$quota}× {$label}.");
-    //         }
-    //     }
-
-    //     $before = $req->file('before_photo')->store('checklists/before','public');
-    //     $after  = $req->file('after_photo')->store('checklists/after','public');
-
-    //     ActivityResult::create([
-    //         'checklist_id' => $checklist->id,
-    //         'user_id'      => $checklist->user_id,
-    //         'activity_id'  => $activity->id,
-    //         'submitted_at' => now(),
-    //         'status'       => $data['status'],
-    //         'before_photo' => $before,
-    //         'after_photo'  => $after,
-    //         'point_earned' => $data['status'] === 'done' ? ($activity->point ?? 0) : 0,
-    //         'note'         => $data['note'] ?? null,
-    //     ]);
-
-    //     return back()->with('success','Aktivitas ditambahkan ke ceklis.');
-    // }
 
     /* =========================
      * Summary (tetap)
