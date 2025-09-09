@@ -196,10 +196,11 @@
                         <select
                           name="id_segmen[{{ $a->id }}]"
                           id="id_segmen_{{ $a->id }}"
-                          class="form-control br-control segmen-select"
+                          class="form-control br-control segmen-select select2"
                           data-selected="{{ old('id_segmen.'.$a->id, $already->id_segmen ?? '') }}"
                           required>
                           <option value="">— pilih segmen —</option>
+                          {{-- isi option segmen nanti lewat controller/ajax --}}
                         </select>
                         <small class="text-muted">Daftar segmen mengikuti region dari Serpo.</small>
                       </div>
@@ -220,6 +221,10 @@
     </div>
   </form>
 </div>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <style>
   @media (max-width: 576px){
@@ -393,5 +398,14 @@ document.addEventListener('DOMContentLoaded', function(){
       .fail(() => alert('Gagal memuat data Segmen (preload).'));
   }
 });
+
+$(document).ready(function() {
+  $('.select2').select2({
+    placeholder: "— pilih segmen —",
+    allowClear: true,
+    width: '100%'
+  });
+});
 </script>
+
 @endsection
