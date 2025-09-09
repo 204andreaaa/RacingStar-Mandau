@@ -23,9 +23,10 @@
     </div>
   </section>
 
-  <form method="post" action="{{ route('checklists.item.store', $checklist->id) }}" enctype="multipart/form-data">
+  <form method="post" action="{{ route('checklists.item.store', $checklist->id) }}" enctype="multipart/form-data" id="activityForm">
     @csrf
 
+    {{-- ALERT SERVER (tetap tampil di atas, tidak dihapus) --}}
     @if(session('success')) <div class="alert alert-success">{{ session('success') }}</div> @endif
     @if(session('error'))   <div class="alert alert-danger" style="white-space:pre-line">{{ session('error') }}</div> @endif
     @if($errors->any())
@@ -91,7 +92,14 @@
                           data-max="{{ $max === null ? '' : $max }}"
                           @if($isDone) checked @endif
                           @if($shouldDisable) disabled @endif
-                          onchange="(function(cb){var card=cb.closest('.activity-card');var fs=card&&card.querySelector('.activity-fields');if(!fs)return;var p=cb.dataset.period||'none';var u=parseInt(cb.dataset.used||'0',10);var mr=cb.dataset.max||'';var m=mr===''?null:parseInt(mr,10);var hasQ=Number.isInteger(m)&&m>0;if(cb.checked&&p!=='none'&&hasQ&&u>=m){cb.checked=false;alert('Kuota aktivitas ini sudah penuh '+(p==='daily'?'hari ini':p==='weekly'?'minggu ini':'bulan ini')+'.');return;}if(cb.checked){fs.removeAttribute('disabled');fs.querySelectorAll('input,textarea,select,button').forEach(function(el){el.removeAttribute('disabled');});}else{fs.setAttribute('disabled','disabled');fs.querySelectorAll('input,textarea,select,button').forEach(function(el){el.setAttribute('disabled','disabled');});}})(this)">
+                          onchange="(function(cb){
+                            var card=cb.closest('.activity-card');var fs=card&&card.querySelector('.activity-fields');if(!fs)return;
+                            var p=cb.dataset.period||'none';var u=parseInt(cb.dataset.used||'0',10);
+                            var mr=cb.dataset.max||'';var m=mr===''?null:parseInt(mr,10);var hasQ=Number.isInteger(m)&&m>0;
+                            if(cb.checked&&p!=='none'&&hasQ&&u>=m){cb.checked=false;alert('Kuota aktivitas ini sudah penuh '+(p==='daily'?'hari ini':p==='weekly'?'minggu ini':'bulan ini')+'.');return;}
+                            if(cb.checked){fs.removeAttribute('disabled');fs.querySelectorAll('input,textarea,select,button').forEach(function(el){el.removeAttribute('disabled');});}
+                            else{fs.setAttribute('disabled','disabled');fs.querySelectorAll('input,textarea,select,button').forEach(function(el){el.setAttribute('disabled','disabled');});}
+                          })(this)">
                     <label class="form-check-label">Done</label>
                   </div>
                 @endif
@@ -216,15 +224,17 @@
     </div>
 
     <div class="mt-4 d-flex gap-2">
-      <button class="btn btn-primary px-4" name="finish" value="0">💾 Simpan</button>
-      <button class="btn btn-success px-4"  name="finish" value="1">✅ Simpan &amp; Selesaikan</button>
+      <button class="btn btn-primary px-4" name="finish" value="0" id="btnSave">💾 Simpan</button>
+      <button class="btn btn-success px-4"  name="finish" value="1" id="btnFinish">✅ Simpan &amp; Selesaikan</button>
     </div>
   </form>
 </div>
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
-<!-- Select2 JS -->
+{{-- Select2 & SweetAlert2 --}}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11.12.4/dist/sweetalert2.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.12.4/dist/sweetalert2.all.min.js"></script>
 
 <style>
   @media (max-width: 576px){
@@ -251,7 +261,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  // INIT enable/disable fields by checkbox
+  // INIT enable/disable fields by checkbox (status Done)
   document.querySelectorAll('.activity-card').forEach(function(card){
     const cb = card.querySelector('.toggle-done');
     const fs = card.querySelector('.activity-fields');
@@ -268,25 +278,21 @@ document.addEventListener('DOMContentLoaded', function(){
     setEnabled(cb.checked && !cb.disabled);
   });
 
-  // ===== SMART FILE UPLOADER =====
-  // Maintain a persistent DataTransfer per input, so picking again won't reset previous picks.
+  // ===== SMART FILE UPLOADER (persist selections; add/remove per file) =====
   document.querySelectorAll('.smart-uploader .smart-file').forEach(function(input){
     const wrap    = input.closest('.smart-uploader');
     const max     = parseInt(input.dataset.max || wrap.dataset.max || '5', 10);
     const labelEl = wrap.querySelector('.smart-files-label');
     const thumbs  = wrap.querySelector('.smart-thumbs');
 
-    // store DataTransfer instance on the element to persist
-    let dt = new DataTransfer();
+    let dt = new DataTransfer(); // persist files across picks
 
     function render(){
       const files = Array.from(dt.files);
       // label
-      if (!files.length) {
-        labelEl.textContent = 'Belum ada file dipilih.';
-      } else {
-        labelEl.textContent = `Dipilih ${files.length}/${max} file: ${files.map(f => f.name).join(', ')}`;
-      }
+      labelEl.textContent = files.length
+        ? `Dipilih ${files.length}/${max} file: ${files.map(f => f.name).join(', ')}`
+        : 'Belum ada file dipilih.';
       // thumbs
       thumbs.innerHTML = '';
       files.forEach((f, idx) => {
@@ -298,9 +304,7 @@ document.addEventListener('DOMContentLoaded', function(){
           <button type="button" class="smart-remove" title="Hapus" data-index="${idx}">×</button>
         `;
         thumbs.appendChild(box);
-        // revoke URL on load/cleanup
         box.querySelector('img').onload = () => URL.revokeObjectURL(url);
-        // remove handler
         box.querySelector('.smart-remove').addEventListener('click', function(){
           const i = parseInt(this.dataset.index, 10);
           const current = Array.from(dt.files);
@@ -311,14 +315,12 @@ document.addEventListener('DOMContentLoaded', function(){
           render();
         });
       });
-
-      // finally sync to input
+      // sync to input
       input.files = dt.files;
     }
 
     input.addEventListener('change', function(){
       const incoming = Array.from(input.files || []);
-      // avoid duplicates (name|size|lastModified)
       const existing = new Set(Array.from(dt.files).map(f => `${f.name}|${f.size}|${f.lastModified}`));
       for (const f of incoming) {
         const key = `${f.name}|${f.size}|${f.lastModified}`;
@@ -328,16 +330,14 @@ document.addEventListener('DOMContentLoaded', function(){
         }
         if (dt.files.length >= max) break;
       }
-      // clear the raw input so the same file can be re-picked later if removed
-      input.value = '';
+      input.value = ''; // allow re-pick same file later
       render();
     });
 
-    // initial
-    render();
+    render(); // initial
   });
 
-  // ===== Batasi handler lama (.limit-3) supaya tidak bentrok dengan smart-file =====
+  // ===== Guard lama untuk input[type=file].limit-3 (biar nggak bentrok) =====
   document.addEventListener('change', function (e) {
     const el = e.target;
     if (!el.matches('input[type="file"].limit-3') || el.classList.contains('smart-file')) return;
@@ -355,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
 
-  // ===== Segmen by region (tetap) =====
+  // ===== Segmen by Region (Serpo) — preload via AJAX (fungsi lama dipertahankan) =====
   const sess_serpo   = @json($checklist->id_serpo ?? '');
   const routeSegmenByRegion = rid => "{{ route('api.segmen.byRegion', ':rid') }}".replace(':rid', rid);
 
@@ -365,8 +365,8 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   function fillSegmen(rows) {
-    const $single = $('#id_segmen');
-    const $many   = $('select.segmen-select');
+    const $single = $('#id_segmen');           // case tunggal (kalau ada)
+    const $many   = $('select.segmen-select'); // case banyak (per-activity)
 
     if ($many.length) {
       $many.each(function () {
@@ -397,9 +397,46 @@ document.addEventListener('DOMContentLoaded', function(){
       .done(rows => fillSegmen(rows))
       .fail(() => alert('Gagal memuat data Segmen (preload).'));
   }
-});
 
-$(document).ready(function() {
+  // ====== TANDAI AKSI & LOADING sebelum submit (agar popup bisa muncul di halaman tujuan) ======
+  const form = document.getElementById('activityForm');
+  const btnSave   = document.getElementById('btnSave');
+  const btnFinish = document.getElementById('btnFinish');
+
+  function markAction(kind){ // kind: 'save' | 'finish'
+    try {
+      localStorage.setItem('BR_SWAL_AFTER_REDIRECT', JSON.stringify({kind, t: Date.now()}));
+    } catch(e){}
+  }
+  function showLoading() {
+    if (typeof Swal === 'undefined') return;
+    Swal.fire({
+      title: 'Menyimpan…',
+      text: 'Mohon tunggu sebentar',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener('click', function(){
+      markAction('save');
+      showLoading();
+    });
+  }
+  if (btnFinish) {
+    btnFinish.addEventListener('click', function(){
+      markAction('finish');
+      showLoading();
+    });
+  }
+});
+</script>
+
+{{-- Inisialisasi Select2 (setelah DOM siap) --}}
+<script>
+$(function(){
   $('.select2').select2({
     placeholder: "— pilih segmen —",
     allowClear: true,

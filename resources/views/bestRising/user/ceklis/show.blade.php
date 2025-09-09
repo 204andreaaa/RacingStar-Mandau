@@ -58,7 +58,7 @@
     </div>
 
     <div class="mt-1 mt-md-0 w-100 w-md-auto text-md-end">
-      <a href="{{ route('checklists.table-ceklis') }}" class="btn btn-light w-100 w-md-auto">← Kembali</a>
+      <a href="{{ route('checklists.table-ceklis') }}" class="btn btn-primary w-100 w-md-auto">← Kembali</a>
     </div>
   </section>
 

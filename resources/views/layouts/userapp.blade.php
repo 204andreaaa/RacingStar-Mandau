@@ -149,6 +149,52 @@
 
 
 @stack('scripts')
+{{-- SweetAlert2 (kalau belum ada di layout) --}}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.12.4/dist/sweetalert2.all.min.js"></script>
+
+<style>
+  /* kecilin font title */
+  .swal-title-sm {
+    font-size: 16px !important;
+    line-height: 1.4;
+  }
+  /* opsional: kecilin isi popup juga */
+  .swal-popup-sm {
+    font-size: 14px !important;
+  }
+</style>
+
+<script>
+(function(){
+  try {
+    const raw = localStorage.getItem('BR_SWAL_AFTER_REDIRECT');
+    if (!raw) return;
+    const data = JSON.parse(raw || '{}');
+    localStorage.removeItem('BR_SWAL_AFTER_REDIRECT'); // cuma sekali tampil
+
+    const kind = (data && data.kind) || 'save'; // 'save' | 'finish'
+    const title = kind === 'finish'
+      ? 'Berhasil disimpan & diselesaikan, Selamat Anda mendapatkan Star'
+      : 'Berhasil disimpan ayo lanjutkan untuk mendapatkan star';
+
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'success',
+        title: title, // lama tampil 4 detik
+        showConfirmButton: false,
+        customClass: {
+          title: 'swal-title-sm',
+          popup: 'swal-popup-sm'
+        }
+      });
+    } else {
+      alert(title); // fallback kalau swal gagal load
+    }
+  } catch(e){}
+})();
+</script>
+
+
 <script src="{{ asset('adminLTE/plugins/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ asset('adminLTE/dist/js/adminlte.min.js') }}"></script>
 <script src="{{ asset('adminLTE/plugins/datatables/jquery.dataTables.min.js') }}"></script>

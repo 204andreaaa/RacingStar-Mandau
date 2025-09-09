@@ -5,7 +5,8 @@
   <div class="card">
     <div class="card-header d-flex align-items-center flex-wrap gap-2">
       <h3 class="mb-0">Data Activity</h3>
-      <!-- tambahkan class .filters supaya gampang diatur responsif -->
+
+      {{-- FILTERS --}}
       <div class="ms-auto ml-auto d-flex gap-2 filters">
         <select id="f_status" class="form-control form-control-sm" style="min-width:130px">
           <option value="">Semua Status</option>
@@ -21,6 +22,7 @@
 
     <div class="card-body">
       <div class="table-responsive">
+        {{-- TABLE (desktop) --}}
         <table id="table" class="table table-bordered">
           <thead>
             <tr>
@@ -36,6 +38,9 @@
             </tr>
           </thead>
         </table>
+
+        {{-- CARD LIST (mobile) --}}
+        <div id="cardList" class="dt-cardlist"></div>
       </div>
     </div>
   </div>
@@ -43,68 +48,65 @@
 
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
-{{-- ====== RESPONSIVE ONLY: tidak mengubah fungsi ====== --}}
+{{-- ====== STYLE ====== --}}
 <style>
-  /* Ruang nafas */
   .content-wrapper { padding: 0.75rem; }
   .card { overflow: hidden; }
 
-  /* Table: lebih padat di mobile */
+  /* default: sembunyikan card list di desktop */
+  .dt-cardlist { display: none; }
+
+  /* --- CARD LIST (mobile) --- */
+  .dt-cardlist .item {
+    border: 1px solid #e5e7eb; border-radius: .5rem; padding: .75rem;
+    margin-bottom: .75rem; background: #fff;
+  }
+  .dt-cardlist .row1 {
+    display:flex; justify-content:space-between; gap:.5rem; font-weight:600;
+  }
+  .dt-cardlist .meta {
+    font-size: .85rem; color:#6b7280; margin:.25rem 0 .5rem;
+  }
+  .dt-cardlist .kv {
+    display:grid; grid-template-columns: 110px 1fr; gap:.25rem .5rem; font-size:.9rem;
+  }
+  .dt-cardlist .actions { margin-top:.5rem; display:flex; flex-wrap:wrap; gap:.5rem; }
+  .badge { display:inline-block; padding:.15rem .45rem; border-radius:.25rem; font-size:.75rem; }
+  .badge-success{background:#d1fae5;color:#065f46}
+  .badge-warning{background:#fef3c7;color:#92400e}
+  .badge-secondary{background:#e5e7eb;color:#374151}
+
+  /* Table tweaks / responsive switch */
   @media (max-width: 768px) {
-    #table { font-size: 13px; }
-    #table td, #table th { padding: .45rem .5rem; vertical-align: middle; }
+    #table { display: none; }          /* hide tabel di mobile */
+    .dt-cardlist { display: block; }   /* show card list */
   }
 
-  /* Header jadi kolom, filter jadi grid di HP */
+  /* Header → kolom; filter jadi grid di mobile */
   @media (max-width: 768px) {
-    .card-header {
-      flex-direction: column;
-      align-items: stretch !important;
-      gap: .5rem !important;
-    }
+    .card-header { flex-direction: column; align-items: stretch !important; gap: .5rem !important; }
     .card-header h3 { margin-bottom: .25rem !important; }
     .filters {
-      width: 100%;
-      display: grid !important;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: .5rem !important;
+      width: 100%; display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem !important;
     }
     .filters .btn { width: 100%; }
   }
+  @media (max-width: 480px) { .filters { grid-template-columns: 1fr; } }
 
-  /* HP kecil banget → 1 kolom */
-  @media (max-width: 480px) {
-    .filters { grid-template-columns: 1fr; }
-  }
-
-  /* Table container */
+  /* Table container (desktop) */
   .table-responsive { width: 100%; overflow-x: auto; }
-
-  /* Bungkus teks panjang di kolom Lokasi (kolom ke-6) */
   #table td:nth-child(6) { white-space: normal; word-break: break-word; }
-
-  /* Sembunyikan kolom “berat” di layar kecil (tanpa sentuh data/fungsi) 
-     Urutan kolom: 1 No | 2 Mulai | 3 Selesai | 4 Team | 5 Nama | 6 Lokasi | 7 Total | 8 Status | 9 Aksi
-  */
-  /* ≤576px: hide Team(4) & Lokasi(6) */
-  @media (max-width: 576px) {
-    #table thead th:nth-child(4), #table tbody td:nth-child(4),
-    #table thead th:nth-child(6), #table tbody td:nth-child(6) { display: none; }
-  }
-  /* ≤400px: hide Total Star(7) juga */
-  @media (max-width: 400px) {
-    #table thead th:nth-child(7), #table tbody td:nth-child(7) { display: none; }
-  }
-
-  /* Kolom aksi biar nggak kebungkus */
   #table td:last-child { white-space: nowrap; }
 </style>
 
+{{-- ====== SCRIPT ====== --}}
 <script>
 $(function(){
   $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
 
   const url = "{{ route('checklists.table-ceklis') }}";
+  const $cardList = $('#cardList');
 
   const table = $('#table').DataTable({
     processing: true,
@@ -113,7 +115,7 @@ $(function(){
     ajax: {
       url: url,
       data: d => {
-        d.team      = $('#f_team').val();
+        d.team      = $('#f_team').val();   // biarkan, kalau nggak ada akan undefined (aman)
         d.status    = $('#f_status').val();
         d.date_from = $('#f_from').val();
         d.date_to   = $('#f_to').val();
@@ -132,6 +134,44 @@ $(function(){
     ]
   });
 
+  function renderCards(rows){
+    let html = '';
+    rows.forEach(r => {
+      const badgeClass = r.status === 'completed' ? 'badge-success'
+                        : (r.status === 'pending' ? 'badge-warning' : 'badge-secondary');
+      html += `
+        <div class="item">
+          <div class="row1">
+            <div>${r.user_nama ?? '-'}</div>
+            <div class="badge ${badgeClass}">${r.status ?? '-'}</div>
+          </div>
+          <div class="meta">${r.lokasi ?? '-'}</div>
+          <div class="kv">
+            <div>Mulai</div><div>: ${r.started_at ?? '-'}</div>
+            <div>Selesai</div><div>: ${r.submitted_at ?? '-'}</div>
+            <div>Team</div><div>: ${r.team ?? '-'}</div>
+            <div>Total Star</div><div>: ${r.total_point ?? 0}</div>
+          </div>
+          <div class="actions">${r.action ?? ''}</div>
+        </div>`;
+    });
+    if (!rows.length) html = `<div class="item">Tidak ada data.</div>`;
+    $cardList.html(html);
+  }
+
+  // pertama kali data masuk dari server
+  table.on('xhr.dt', function () {
+    const json = table.ajax.json() || {};
+    renderCards(json.data || []);
+  });
+
+  // setiap paging/sort/search (halaman aktif)
+  $('#table').on('draw.dt', function(){
+    const rows = table.rows({ page: 'current' }).data().toArray();
+    renderCards(rows);
+  });
+
+  // Filter & Reset
   $('#btnFilter').on('click', () => table.ajax.reload());
   $('#btnReset').on('click', function(){
     $('#f_team, #f_status').val('');
