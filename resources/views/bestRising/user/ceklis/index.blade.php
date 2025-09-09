@@ -223,11 +223,19 @@
       @endforeach
     </div>
 
-    <div class="mt-4 d-flex gap-2">
-      <button class="btn btn-primary px-4" name="finish" value="0" id="btnSave">💾 Simpan</button>
-      <button class="btn btn-success px-4"  name="finish" value="1" id="btnFinish">✅ Simpan &amp; Selesaikan</button>
+    <div class="mt-4 d-flex">
+      <a href="#">&nbsp;&nbsp;&nbsp;</a>
+      <button class="btn btn-primary px-4 me-10" name="finish" value="0" id="btnSave">
+        💾 Simpan
+      </button>
+      <a href="#">&nbsp;&nbsp;&nbsp;</a>
+      <button class="btn btn-success px-4" name="finish" value="1" id="btnFinish">
+        ✅ Simpan &amp; Selesaikan
+      </button>
     </div>
   </form>
+      <br>
+      <br>
 </div>
 
 {{-- Select2 & SweetAlert2 --}}
