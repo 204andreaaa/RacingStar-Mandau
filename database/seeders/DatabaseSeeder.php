@@ -12,9 +12,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call(ActivitySeeder::class);
+        $this->call(ActivitiesTableSeeder::class);
         $this->call(KategoriUserAndUserSeeder::class);
-        $this->call(RegionSerpoSeeder::class);
-
+        $this->call(RegionSerpoSegmenCsvSeeder::class);
+        $this->call(UsersFromCsvSeeder::class);
     }
 }
