@@ -216,6 +216,23 @@
 <script src="{{asset('adminLTE/plugins/moment/moment.min.js')}}"></script>
 <script src="{{asset('adminLTE/plugins/tempusdominus-bootstrap-4/js/tempusdominus-bootstrap-4.min.js')}}"></script>
 
+<style>
+  .select2-container .select2-selection--single {
+    height: calc(2.25rem + 2px) !important; /* sama kaya .form-control-sm / normal */
+    padding: .375rem .75rem !important;     /* kasih ruang atas bawah */
+    border: 1px solid #ced4da !important;   /* samain border bootstrap */
+    border-radius: .25rem !important;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 1.5 !important; /* teks lebih tengah */
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 100% !important;
+    right: .75rem !important;
+  }
+</style>
 <script>
   // DataTables demo (punya kamu)
   $(function () {
