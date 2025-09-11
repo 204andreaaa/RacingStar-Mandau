@@ -7,12 +7,49 @@ use App\Models\UserBestrising;
 use App\Models\Region;
 use App\Models\Serpo;
 use App\Models\Segmen;
+use App\Models\Checklist;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class AdminHomeController extends Controller
 {
+    /**
+     * Tentukan anchor (tanggal rilis). 
+     * - Bisa kamu ambil dari config/env juga kalau mau:
+     *   $anchor = Carbon::parse(config('app.anchor_date', '2025-09-11'));
+     */
+    private function currentQuarterRangeFromAnchor(Carbon $anchor, ?Carbon $now = null): array
+    {
+        $now = $now ?: now();
+
+        // Normalisasi ke awal bulan biar bersih
+        $anchorStart = $anchor->copy()->startOfMonth();
+        $nowStart    = $now->copy()->startOfMonth();
+
+        // Kalau sekarang sebelum rilis, pakai periode pertama (mulai anchorStart)
+        if ($nowStart->lt($anchorStart)) {
+            $start = $anchorStart->copy();
+            $end   = $start->copy()->addMonthsNoOverflow(2)->endOfMonth();
+        } else {
+            $diffMonths = $anchorStart->diffInMonths($nowStart); // non-negative
+            $periodIdx  = intdiv($diffMonths, 3);                // periode ke-berapa
+            $start      = $anchorStart->copy()->addMonths($periodIdx * 3);
+            $end        = $start->copy()->addMonthsNoOverflow(2)->endOfMonth();
+        }
+
+        // Label periode (contoh: "Sep–Nov 2025")
+        $fmt = fn (Carbon $d) => $d->translatedFormat('M Y'); // pakai locale id_ID di app biar "Sep" dst
+        $shortMonth = fn (Carbon $d) => $d->translatedFormat('M');
+        $label = $start->year === $end->year
+            ? sprintf('%s–%s %d', $shortMonth($start), $shortMonth($end), $end->year)
+            : sprintf('%s–%s', $fmt($start), $fmt($end));
+
+        return [$start, $end, $label];
+    }
+
     public function index()
     {
-        // ---- KPI counts (pasti ada nilainya) ----
+        // ---- KPI counts ----
         $counts = [
             'users'   => (int) UserBestrising::query()->count(),
             'regions' => (int) Region::query()->count(),
@@ -20,21 +57,21 @@ class AdminHomeController extends Controller
             'segmens' => (int) Segmen::query()->count(),
         ];
 
-        // ---- Top 5 Region by jumlah Serpo (butuh relasi Region->serpos()) ----
+        // ---- Top 5 Region by jumlah Serpo ----
         $serpoByRegion = Region::query()
             ->withCount('serpos')
             ->orderByDesc('serpos_count')
             ->take(5)
             ->get(['id_region','nama_region']);
 
-        // ---- Top 5 Serpo by jumlah Segmen (butuh relasi Serpo->segmens()) ----
+        // ---- Top 5 Serpo by jumlah Segmen ----
         $segmenBySerpo = Serpo::query()
             ->withCount('segmens')
             ->orderByDesc('segmens_count')
             ->take(5)
             ->get(['id_serpo','nama_serpo']);
 
-        // ---- Latest data (kolom dipilih seperlunya biar irit) ----
+        // ---- Latest data ----
         $latestUsers = UserBestrising::query()
             ->with('kategoriUser:id_kategoriuser,nama_kategoriuser')
             ->latest('id_userBestrising')
@@ -53,15 +90,60 @@ class AdminHomeController extends Controller
             ->take(5)
             ->get(['id_segmen','nama_segmen','id_serpo']);
 
-        // kirim data ke view (pakai alias 'stats' juga kalau ada include yg pakai nama berbeda)
+        // ---- Grafik: distribusi user per kategori ----
+        $userKategori = UserBestrising::select('kategori_user_id', DB::raw('COUNT(*) as total'))
+            ->groupBy('kategori_user_id')
+            ->with(['kategoriUser:id_kategoriuser,nama_kategoriuser'])
+            ->get()
+            ->map(fn ($r) => [
+                'label' => $r->kategoriUser->nama_kategoriuser ?? 'Tidak diketahui',
+                'value' => (int) $r->total,
+            ])
+            ->values();
+
+        // ---- Grafik: serpo per region (pakai hasil $serpoByRegion) ----
+        $serpoPerRegion = collect($serpoByRegion ?? [])->map(fn ($r) => [
+            'label' => $r->nama_region,
+            'value' => (int) $r->serpos_count,
+        ])->values();
+
+        // ================== NEW: Top Serpo by Points berdasarkan anchor ==================
+        // SET ANCHOR DI SINI (tanggal rilis). Ubah sesuai kebutuhanmu:
+        $anchor = Carbon::create(2025, 9, 11);
+        [$periodStart, $periodEnd, $periodLabel] = $this->currentQuarterRangeFromAnchor($anchor);
+
+        $topSerpoPointsQuarter = Checklist::query()
+            ->select('id_serpo', DB::raw('SUM(total_point) as points'))
+            ->whereNotNull('id_serpo')
+            ->whereBetween('created_at', [$periodStart, $periodEnd])
+            ->groupBy('id_serpo')
+            ->orderByDesc('points')
+            ->with(['serpo:id_serpo,nama_serpo,id_region','serpo.region:id_region,nama_region'])
+            ->take(7)
+            ->get();
+
+        $serpoPointsQuarter = $topSerpoPointsQuarter->map(fn ($r) => [
+            'label' => $r->serpo->nama_serpo ?? ('Serpo #'.$r->id_serpo),
+            'sub'   => $r->serpo && $r->serpo->region ? $r->serpo->region->nama_region : null,
+            'value' => (int) $r->points,
+        ])->values();
+        // ================================================================================
+
         return view('bestRising.admin.index', [
-            'counts'        => $counts,   // akses di Blade: $counts['users'], dst.
-            'stats'         => $counts,   // alternatif: $stats['users']
-            'serpoByRegion' => $serpoByRegion,
-            'segmenBySerpo' => $segmenBySerpo,
-            'latestUsers'   => $latestUsers,
-            'latestSerpo'   => $latestSerpo,
-            'latestSegmen'  => $latestSegmen,
+            'counts'             => $counts,
+            'stats'              => $counts,
+            'serpoByRegion'      => $serpoByRegion,
+            'segmenBySerpo'      => $segmenBySerpo,
+            'latestUsers'        => $latestUsers,
+            'latestSerpo'        => $latestSerpo,
+            'latestSegmen'       => $latestSegmen,
+            'userKategori'       => $userKategori,
+            'serpoPerRegion'     => $serpoPerRegion,
+            // kirim data periode & leaderboard points (quarter by anchor)
+            'periodStart'        => $periodStart,
+            'periodEnd'          => $periodEnd,
+            'periodLabel'        => $periodLabel,
+            'serpoPointsQuarter' => $serpoPointsQuarter,
         ]);
     }
 }

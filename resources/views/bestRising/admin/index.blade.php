@@ -49,7 +49,78 @@
         </div>
       </div>
 
-      {{-- Distribusi --}}
+      {{-- Grafik ringkas --}}
+      <div class="row mt-3">
+        <div class="col-xl-6">
+          <div class="card h-100">
+            <div class="card-header"><strong>Distribusi User per Kategori</strong></div>
+            <div class="card-body">
+              <div class="chart-box"><canvas id="chartUserKategori"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-6 mt-3 mt-xl-0">
+          <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <strong>Jumlah Serpo per Region</strong>
+              <a href="{{ route('admin.region.index') }}" class="btn btn-xs btn-outline-secondary">Detail</a>
+            </div>
+            <div class="card-body">
+              <div class="chart-box"><canvas id="chartSerpoRegion"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {{-- NEW: Top Serpo by Points (Periode 3 Bulan dari Anchor) --}}
+      <div class="row mt-3">
+        <div class="col-xl-8">
+          <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <strong>Top Serpo by Points — {{ $periodLabel }}</strong>
+              {{-- opsional: tombol filter / info --}}
+            </div>
+            <div class="card-body">
+              <div class="chart-box"><canvas id="chartSerpoPointsQuarter"></canvas></div>
+              <small class="text-muted d-block mt-2">
+                Periode: {{ $periodStart->format('d M Y') }} s/d {{ $periodEnd->format('d M Y') }}
+              </small>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-4 mt-3 mt-xl-0">
+          <div class="card h-100">
+            <div class="card-header"><strong>Top 7 (Detail)</strong></div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                  <thead>
+                    <tr>
+                      <th>Serpo</th>
+                      <th>Region</th>
+                      <th class="text-right">Points</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @forelse($serpoPointsQuarter as $row)
+                      <tr>
+                        <td>{{ $row['label'] }}</td>
+                        <td>{{ $row['sub'] ?? '-' }}</td>
+                        <td class="text-right pr-2">{{ number_format($row['value']) }}</td>
+                      </tr>
+                    @empty
+                      <tr><td colspan="3" class="text-center text-muted p-3">Belum ada data periode ini</td></tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {{-- Distribusi (Top 5) --}}
       <div class="row mt-3">
         <div class="col-lg-6">
           <div class="card h-100">
@@ -95,25 +166,35 @@
       </div>
 
       {{-- Terbaru --}}
-      <div class="row mt-3">
+      {{-- <div class="row mt-3">
         <div class="col-xl-4">
           <div class="card h-100">
             <div class="card-header"><strong>User Terbaru</strong></div>
             <div class="card-body p-0">
-              <table class="table table-sm mb-0">
-                <thead><tr><th>Nama</th><th>Kategori</th><th>Email</th></tr></thead>
-                <tbody>
-                  @forelse($latestUsers as $u)
+              <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                  <thead>
                     <tr>
-                      <td>{{ $u->nama }}</td>
-                      <td>{{ $u->kategoriUser->nama_kategoriuser ?? '-' }}</td>
-                      <td>{{ $u->email }}</td>
+                      <th>Nama</th>
+                      <th>Kategori</th>
+                      <th>Email</th>
                     </tr>
-                  @empty
-                    <tr><td colspan="3" class="text-center text-muted p-3">—</td></tr>
-                  @endforelse
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    @forelse($latestUsers as $u)
+                      <tr>
+                        <td>{{ $u->nama }}</td>
+                        <td>{{ $u->kategoriUser->nama_kategoriuser ?? '-' }}</td>
+                        <td class="text-break">{{ $u->email }}</td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="3" class="text-center text-muted p-3">—</td>
+                      </tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -161,31 +242,38 @@
             </div>
           </div>
         </div>
-      </div>
+      </div> --}}
 
     </div>
   </section>
 </div>
 
 <style>
-/* -- FIX icon small-box biar ga “keluar” -- */
-.kpi-box.small-box{ overflow: hidden; } /* jaga-jaga */
-.kpi-box.small-box .icon{
-  position: absolute !important;
-  top: 14px !important;
-  right: 14px !important;
-  width: auto !important;
-  height: auto !important;
-  line-height: 1 !important;
-  font-size: 28px !important;   /* ubah ukuran ikon */
-  color: #28a745 !important;
-  opacity: .75 !important;
-  transform: none !important;   /* matikan animasi scale bawaan */
-}
-.kpi-box.small-box .inner{ position: relative; z-index: 1; }
+  .table td, .table th { vertical-align: middle; }
+  .table td.text-break { word-break: break-word; max-width: 180px; }
 
+  /* -- FIX icon small-box biar ga “keluar” -- */
+  .kpi-box.small-box{ overflow: hidden; }
+  .kpi-box.small-box .icon{
+    position: absolute !important;
+    top: 14px !important;
+    right: 14px !important;
+    width: auto !important;
+    height: auto !important;
+    line-height: 1 !important;
+    font-size: 28px !important;
+    color: #28a745 !important;
+    opacity: .75 !important;
+    transform: none !important;
+  }
+  .kpi-box.small-box .inner{ position: relative; z-index: 1; }
+
+  /* Chart sizing */
+  .chart-box{height:280px; position:relative;}
+  @media (max-width: 575.98px){ .chart-box{height:240px;} }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function(){
   const g=document.getElementById('greeting'), c=document.getElementById('clock'), t=document.getElementById('todayLabel');
@@ -193,6 +281,50 @@
   function tick(){const d=new Date(),pad=n=>n.toString().padStart(2,'0'); c.textContent=`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;}
   function today(){const d=new Date(),opt={weekday:'long',year:'numeric',month:'long',day:'numeric'}; t.textContent=d.toLocaleDateString('id-ID',opt);}
   greet(); today(); tick(); setInterval(tick,1000);
+})();
+
+// Chart.js init
+(function(){
+  const userKategori       = @json($userKategori ?? []);
+  const serpoPerRegion     = @json($serpoPerRegion ?? []);
+  const serpoPointsQuarter = @json($serpoPointsQuarter ?? []);
+
+  // Donut: user per kategori
+  const donutCtx = document.getElementById('chartUserKategori');
+  if (donutCtx && userKategori.length){
+    new Chart(donutCtx, {
+      type: 'doughnut',
+      data: { labels: userKategori.map(x => x.label), datasets: [{ data: userKategori.map(x => x.value) }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '55%' }
+    });
+  }
+
+  // Horizontal bar: serpo per region
+  const barRegionCtx = document.getElementById('chartSerpoRegion');
+  if (barRegionCtx && serpoPerRegion.length){
+    new Chart(barRegionCtx, {
+      type: 'bar',
+      data: { labels: serpoPerRegion.map(x => x.label), datasets: [{ label: 'Serpo', data: serpoPerRegion.map(x => x.value) }] },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+  }
+
+  // Horizontal bar: top serpo by points (quarter dari anchor)
+  const barPointsCtx = document.getElementById('chartSerpoPointsQuarter');
+  if (barPointsCtx && serpoPointsQuarter.length){
+    new Chart(barPointsCtx, {
+      type: 'bar',
+      data: {
+        labels: serpoPointsQuarter.map(x => x.sub ? `${x.label} — ${x.sub}` : x.label),
+        datasets: [{ label: 'Points', data: serpoPointsQuarter.map(x => x.value) }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx)=> ` ${ctx.raw} poin` } } },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  }
 })();
 </script>
 @endsection
