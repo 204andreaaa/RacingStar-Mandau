@@ -23,18 +23,72 @@
       padding:24px;
       font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","Liberation Sans","Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
     }
+
+    /* ====== Splash Screen ====== */
+    .splash{
+      position:fixed; inset:0; z-index:9999;
+      background:
+        radial-gradient(1200px 600px at 20% -10%, #f2fff6 0, transparent 60%),
+        radial-gradient(1000px 600px at 110% 20%, #eefaf1 0, transparent 60%),
+        #ffffff;
+      display:flex; align-items:center; justify-content:center;
+      transition:opacity .6s ease, visibility .6s ease; /* fade sedikit lebih lama */
+    }
+    .splash.is-hidden{ opacity:0; visibility:hidden; }
+
+    .splash-box{
+      background:#fff; border:1px solid #edf2f7; border-radius:18px;
+      box-shadow:0 10px 30px rgba(40,167,69,.12);
+      padding:24px 28px; text-align:center; min-width:260px;
+    }
+    .splash-logo{
+      width:58px; height:58px; border-radius:50%;
+      background:var(--brand-soft); display:flex; align-items:center; justify-content:center;
+      margin:0 auto 12px; box-shadow:inset 0 0 0 2px rgba(40,167,69,.15);
+    }
+    .splash-title{ font-weight:800; color:#1f2937; letter-spacing:.2px; }
+    .splash-sub{ color:#6b7280; font-size:.9rem; }
+
+    .spinner{
+      width:26px; height:26px; border-radius:50%;
+      border:3px solid rgba(40,167,69,.18); border-top-color:var(--brand);
+      margin:12px auto 6px; animation:spin 1s linear infinite;
+    }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+
+    .dots{ display:inline-flex; gap:4px; margin-top:6px; }
+    .dots i{
+      width:6px; height:6px; border-radius:50%; background:var(--brand);
+      opacity:.25; animation:bounce 1.2s infinite ease-in-out;
+    }
+    .dots i:nth-child(2){ animation-delay:.2s; }
+    .dots i:nth-child(3){ animation-delay:.4s; }
+    @keyframes bounce{
+      0%, 80%, 100%{ transform:translateY(0); opacity:.25; }
+      40%{ transform:translateY(-6px); opacity:1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spinner, .dots i { animation: none; }
+      .splash{ transition:none; }
+    }
+
+    /* ====== Login Card ====== */
     .login-card{
       width:100%; max-width:460px; background:#fff;
       border:1px solid #edf2f7; border-radius:18px; overflow:hidden;
       box-shadow:0 10px 30px rgba(40,167,69,.10);
+      opacity:0; transform:translateY(6px);
+      transition:opacity .35s ease, transform .35s ease;
     }
+    .login-card.is-ready{ opacity:1; transform:translateY(0); }
+
     .login-header{
       padding:24px 22px;
       background:linear-gradient(135deg,#f0fff4 0%,#ffffff 60%);
       border-bottom:1px solid #edf2f7;
     }
     .brand{ display:flex; align-items:center; gap:12px; text-decoration:none; color:var(--text); }
-
     .brand-logo{
       width:42px; height:42px; border-radius:50%;
       background:var(--brand-soft); color:var(--brand);
@@ -49,27 +103,16 @@
 
     /* === Input group sinkron === */
     .br-input .input-group-text,
+    .br-input .form-control{ border-color:#e5e7eb; height:48px; }
+    .br-input .input-group-text{ background:#fff; color:#9ca3af; }
     .br-input .form-control{
-      border-color:#e5e7eb;
-      height:48px;
-    }
-    .br-input .input-group-text{
-      background:#fff;
-      color:#9ca3af;
-    }
-    .br-input .form-control{
-      border-top-right-radius:12px;
-      border-bottom-right-radius:12px;
-      padding-left:12px;
+      border-top-right-radius:12px; border-bottom-right-radius:12px; padding-left:12px;
     }
     .br-input .input-group-prepend .input-group-text{
-      border-top-left-radius:12px;
-      border-bottom-left-radius:12px;
+      border-top-left-radius:12px; border-bottom-left-radius:12px;
     }
     .br-input .input-group-append .input-group-text{
-      border-top-right-radius:12px;
-      border-bottom-right-radius:12px;
-      cursor:pointer;
+      border-top-right-radius:12px; border-bottom-right-radius:12px; cursor:pointer;
     }
     .br-input .form-control:focus{
       box-shadow:0 0 0 .15rem rgba(40,167,69,.15);
@@ -94,7 +137,21 @@
 </head>
 <body>
 
-  <div class="login-card">
+  {{-- ===== Splash Screen ===== --}}
+  <div class="splash" id="splash">
+    <div class="splash-box">
+      <div class="splash-logo">
+        <img src="/images/mandau.png" alt="Logo" style="width:40px;height:40px;border-radius:50%;">
+      </div>
+      <div class="splash-title">Mandau Racing Star</div>
+      <div class="splash-sub">Menyiapkan halaman...</div>
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+    </div>
+  </div>
+
+  {{-- ===== Login Card ===== --}}
+  <div class="login-card" id="loginCard" aria-hidden="true">
     <div class="login-header">
       <a href="{{ url('/') }}" class="brand">
         <div class="brand-logo">
@@ -115,7 +172,6 @@
       @endif
 
       <form method="POST" action="{{ route('login.post') }}" id="formLogin" novalidate>
-
         @csrf
 
         {{-- Email --}}
@@ -178,24 +234,66 @@
   <script src="{{ asset('adminLTE/plugins/jquery/jquery.min.js') }}"></script>
   <script src="{{ asset('adminLTE/plugins/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
   <script>
-    // toggle show/hide password
-    document.getElementById('togglePass').addEventListener('click', function(){
-      const input = document.getElementById('password');
-      const icon  = this.querySelector('i');
-      if(input.type === 'password'){
-        input.type = 'text';
-        icon.classList.replace('fa-eye','fa-eye-slash');
-      }else{
-        input.type = 'password';
-        icon.classList.replace('fa-eye-slash','fa-eye');
-      }
-    });
+    // ====== Splash logic (dengan minimum durasi lebih lama dikit) ======
+    (function(){
+      const splash = document.getElementById('splash');
+      const card   = document.getElementById('loginCard');
 
-    // disable button saat submit
-    document.getElementById('formLogin').addEventListener('submit', function(){
-      const btn = this.querySelector('button[type=submit]');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Memproses...';
+      const MIN_DURATION = 1000; // << lama minimum tampil splash (ms) — dibikin lebih lama dikit
+      const MAX_DURATION = 5000; // << batas maksimum tunggu (ms) untuk safety
+      const AFTER_FADE_DELAY = 240; // jeda kecil setelah splash hilang sebelum card muncul
+      const start = performance.now();
+
+      let hidden = false;
+      function hideSplash(){
+        if (hidden) return;
+        hidden = true;
+        splash.classList.add('is-hidden');
+        setTimeout(function(){
+          card.classList.add('is-ready');
+          card.removeAttribute('aria-hidden');
+          const email = document.getElementById('email'); if (email) email.focus();
+        }, AFTER_FADE_DELAY);
+      }
+
+      // Saat semua asset selesai
+      window.addEventListener('load', function(){
+        const elapsed = performance.now() - start;
+        const waitMore = Math.max(0, MIN_DURATION - elapsed);
+        setTimeout(hideSplash, waitMore);
+      });
+
+      // Safety: apapun yang terjadi, jangan lebih dari MAX_DURATION
+      setTimeout(hideSplash, MAX_DURATION);
+    })();
+
+    // ====== Toggle show/hide password + submit state ======
+    document.addEventListener('DOMContentLoaded', function(){
+      const toggle = document.getElementById('togglePass');
+      if(toggle){
+        toggle.addEventListener('click', function(){
+          const input = document.getElementById('password');
+          const icon  = this.querySelector('i');
+          if(input.type === 'password'){
+            input.type = 'text';
+            icon.classList.replace('fa-eye','fa-eye-slash');
+          }else{
+            input.type = 'password';
+            icon.classList.replace('fa-eye-slash','fa-eye');
+          }
+        });
+      }
+
+      const form = document.getElementById('formLogin');
+      if(form){
+        form.addEventListener('submit', function(){
+          const btn = this.querySelector('button[type=submit]');
+          if(btn){
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Memproses...';
+          }
+        });
+      }
     });
   </script>
 </body>
