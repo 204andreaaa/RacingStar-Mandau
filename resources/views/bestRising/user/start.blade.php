@@ -8,13 +8,13 @@
   $sessId       = $getUserSession['id']        ?? null;
   $sessRegion   = $getUserSession['id_region'] ?? null;
   $sessSerpo    = $getUserSession['id_serpo']  ?? null;
-  $sessKatNama  = strtoupper(trim($getUserSession['kategori_nama'] ?? '')); // <-- penting
+  $sessKatNama  = strtoupper(trim($getUserSession['kategori_nama'] ?? '')); // 'SERPO' | 'NOC' | ...
   $isNOC        = $sessKatNama === 'NOC';
   $isSERPO      = $sessKatNama === 'SERPO';
 
   // aturan tampil
-  $showRegion        = $isSERPO || $isNOC || $sessKatNama === '';
-  $showSerpoAndSeg   = $isSERPO;
+  $showRegion      = $isSERPO || $isNOC || $sessKatNama === '';
+  $showSerpo       = $isSERPO;
 @endphp
 
 <div class="content-wrapper">
@@ -40,6 +40,21 @@
   {{-- CARD FORM --}}
   <div class="card br-card shadow-lg-sm">
     <div class="card-body">
+
+      {{-- FLASH ALERT --}}
+      @if (session('danger'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          {{ session('danger') }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      @endif
+      @if (session('success'))
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          {{ session('success') }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      @endif
+
       <form method="post" action="{{ route('checklists.store') }}">
         @csrf
 
@@ -86,7 +101,7 @@
         {{-- SECTION: LOKASI KERJA --}}
         <div class="br-section-title">Lokasi Kerja</div>
         <div class="row g-3">
-          @if($showSerpoAndSeg)
+          @if($showSerpo)
           <div class="col-md-6">
             <label class="form-label">Serpo</label>
             <select name="id_serpo" id="id_serpo" class="form-control br-control" {{ $sessSerpo ? 'disabled' : '' }} required>
@@ -102,7 +117,8 @@
           <div class="text-muted small">
             Pastikan pilihan sudah benar sebelum melanjutkan.
           </div>
-          <button class="btn btn-primary br-btn-primary">
+          {{-- tombol dikontrol JS untuk cek pending sebelum submit --}}
+          <button type="button" id="btn-next" class="btn btn-primary br-btn-primary">
             Lanjut ke Ceklis
           </button>
         </div>
@@ -114,7 +130,7 @@
 
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
-{{-- STYLE (tetap) --}}
+{{-- STYLE --}}
 <style>
   .shadow-lg-sm { box-shadow: 0 6px 24px rgba(16,24,40,.08); }
   .br-hero{ background: linear-gradient(135deg,#f7f9fc,#eff6ff); border:1px solid #e9eef7; border-radius: 16px; padding: 16px 18px; }
@@ -132,48 +148,91 @@
   .mt-4{margin-top:1.25rem!important}
 </style>
 
-{{-- JS (ditambah guard utk NOC) --}}
+{{-- SCRIPT --}}
 <script>
 $(function () {
   const routeSerpoByRegion = rid => "{{ route('api.serpo.byRegion', ':rid') }}".replace(':rid', rid);
+  const apiPendingUrl  = "{{ route('api.checklists.pendingCount') }}";
+  const tablePageUrl   = "{{ route('checklists.table-ceklis') }}";
 
+  // sesi dari PHP
   const sess_region = @json($sessRegion ?? '');
   const sess_serpo  = @json($sessSerpo  ?? '');
   const sess_kat    = @json($sessKatNama ?? '');
+  const teamVal     = @json($team);
+  const sessId      = @json($sessId ?? null);
 
   function resetSelect($el, placeholder) {
     $el.empty().append(new Option(placeholder, ''));
   }
 
-  // Kalau bukan SERPO, kita selesai sampai sini (NOC: gak ada serpo/segmen)
-  if (sess_kat !== 'SERPO') {
-    return;
+  // ===== Dependent Serpo (khusus SERPO) =====
+  if (sess_kat === 'SERPO') {
+    // Event region → load serpo
+    $('#id_region').on('change', function () {
+      const rid = $(this).val();
+      resetSelect($('#id_serpo'), '— pilih serpo —');
+      if (!rid) return;
+
+      $.get(routeSerpoByRegion(rid))
+        .done(rows => { rows.forEach(x => $('#id_serpo').append(new Option(x.text, x.id))); })
+        .fail(() => { alert('Gagal memuat data Serpo.'); });
+    });
+
+    // PRELOAD via session
+    if (sess_region) {
+      resetSelect($('#id_serpo'), '— pilih serpo —');
+      $.get(routeSerpoByRegion(sess_region))
+        .done(rows => {
+          rows.forEach(x => {
+            const opt = new Option(x.text, x.id, false, (x.id == sess_serpo));
+            $('#id_serpo').append(opt);
+          });
+        })
+        .fail(() => { alert('Gagal memuat data Serpo (preload).'); });
+    }
   }
 
-  // Event region → load serpo
-  $('#id_region').on('change', function () {
-    const rid = $(this).val();
-    resetSelect($('#id_serpo'), '— pilih serpo —');
-    if (!rid) return;
+  // ===== Cek pending sebelum submit =====
+  $('#btn-next').on('click', function (e) {
+    e.preventDefault();
 
-    $.get(routeSerpoByRegion(rid))
-      .done(rows => { rows.forEach(x => $('#id_serpo').append(new Option(x.text, x.id))); })
-      .fail(() => { alert('Gagal memuat data Serpo.'); });
+    let userId = $('select[name="user_id"]').prop('disabled')
+                ? sessId
+                : $('select[name="user_id"]').val();
+
+    if (!userId) {
+      $('form').trigger('submit');
+      return;
+    }
+
+    $.get(apiPendingUrl, { user_id: userId, team: teamVal })
+      .done(function (res) {
+        const count = (res && typeof res.count !== 'undefined') ? res.count : 0;
+        if (count > 0) {
+          Swal.fire({
+            title: 'Tidak Bisa Lanjut!',
+            html: `Kamu masih punya <b>${count}</b> ceklis berstatus <span class="text-warning">PENDING</span>.<br><br>
+                  Selesaikan dulu ya.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Buka Data Ceklis',
+            cancelButtonText: 'Tutup',
+            reverseButtons: true,
+          }).then((result) => {
+            if (result.isConfirmed) {
+              window.location.href = tablePageUrl + '?status=pending';
+            }
+          });
+        } else {
+          $('form').trigger('submit'); // aman → buat sesi baru
+        }
+      })
+      .fail(function () {
+        $('form').trigger('submit');
+      });
   });
 
-  // PRELOAD via session (khusus SERPO)
-  if (sess_region) {
-    resetSelect($('#id_serpo'), '— pilih serpo —');
-
-    $.get(routeSerpoByRegion(sess_region))
-      .done(rows => {
-        rows.forEach(x => {
-          const opt = new Option(x.text, x.id, false, (x.id == sess_serpo));
-          $('#id_serpo').append(opt);
-        });
-      })
-      .fail(() => { alert('Gagal memuat data Serpo (preload).'); });
-  }
 });
 </script>
 @endsection

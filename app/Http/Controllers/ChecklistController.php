@@ -45,27 +45,37 @@ class ChecklistController extends Controller
             'id_region' => ['required','integer'],
         ];
 
-        // Kalau SERPO, wajib serpo + segmen
         if ($kat === 'SERPO') {
             $rules['id_serpo']  = ['required','integer'];
         }
 
-        // NOC/ADMIN: serpo & segmen tidak diwajibkan
         $data = $req->validate($rules);
+
+        // === GUARD SERVER-SIDE: TOLAK kalau masih ada pending ===
+        $hasPending = Checklist::where('user_id', $data['user_id'])
+                        ->where('status', 'pending')
+                        ->when($data['team'] ?? null, fn($q) => $q->where('team', $data['team']))
+                        ->exists();
+
+        if ($hasPending) {
+            return back()
+                ->withInput()
+                ->with('danger', 'Tidak bisa lanjut. Kamu masih punya data ceklis berstatus PENDING. Selesaikan dulu di menu Data Ceklis.');
+        }
+        // === END GUARD ===
 
         // Normalisasi field yg tidak dipakai
         $idSerpo  = $kat === 'SERPO' ? ($data['id_serpo']  ?? null) : null;
 
         $checklist = Checklist::create([
-            'user_id'   => $data['user_id'],
-            'team'      => $data['team'],
-            'id_region' => $data['id_region'],
-            'id_serpo'  => $idSerpo,   // null utk NOC/ADMIN
-            'started_at'=> now(),
-            'status'    => 'pending',
+            'user_id'     => $data['user_id'],
+            'team'        => $data['team'],
+            'id_region'   => $data['id_region'],
+            'id_serpo'    => $idSerpo,
+            'started_at'  => now(),
+            'status'      => 'pending',
         ]);
 
-        // kalau route model binding belum diset, pakai id
         return redirect()->route('checklists.show', $checklist->id);
     }
 
@@ -326,6 +336,29 @@ class ChecklistController extends Controller
             ->with('success', $request->input('submit_action') === 'complete'
                 ? 'Checklist diselesaikan.'
                 : 'Draft checklist tersimpan.');
+    }
+
+    public function pendingCount(Request $request)
+    {
+        // ambil dari request (prioritas), fallback session manual auth
+        $userId = $request->input('user_id');
+        if (!$userId) {
+            $sess = session('auth_user');
+            $userId = $sess['id'] ?? $sess['id_userBestrising'] ?? null;
+        }
+
+        $team = $request->input('team'); // optional
+
+        $q = Checklist::where('user_id', $userId)
+            ->where('status', 'pending');
+
+        if ($team) {
+            $q->where('team', $team);
+        }
+
+        return response()->json([
+            'count' => $q->count(),
+        ]);
     }
 }
 

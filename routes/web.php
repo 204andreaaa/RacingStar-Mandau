@@ -54,6 +54,8 @@ Route::middleware('manual.auth')->group(function () {
     Route::get('/api/segmen/by-serpo/{id_serpo}',   [ChecklistController::class,'segmenBySerpo'])->name('api.segmen.bySerpo');
     Route::get('/api/segmen/by-region/{id_serpo}',   [ChecklistController::class,'segmenByRegion'])->name('api.segmen.byRegion');
 
+    Route::get('/api/checklists/pending-count', [ChecklistController::class, 'pendingCount'])->name('api.checklists.pendingCount');
+
     // ---------------------------
     // ADMIN AREA
     // ---------------------------
