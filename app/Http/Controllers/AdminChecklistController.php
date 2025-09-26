@@ -257,6 +257,8 @@ class AdminChecklistController extends Controller
      */
     public function destroyAll(Request $request)
     {
+        abort_unless((session('auth_user')['email'] ?? null) === 'superadmin@mandau.id', 403);
+
         $team     = $request->input('team');
         $status   = $request->input('status');
         $dateFrom = $request->input('date_from');

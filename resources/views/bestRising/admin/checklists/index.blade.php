@@ -1,6 +1,10 @@
 @extends('layouts.appBestRising')
 
 @section('main')
+@php
+  $u = session('auth_user');
+  $isSuper = isset($u['email']) && $u['email'] === 'superadmin@mandau.id';
+@endphp
 <div class="content-wrapper">
 
   <div class="card">
@@ -54,6 +58,9 @@
 </style>
 
 <script>
+  const IS_SUPER = @json($isSuper);
+</script>
+<script>
 $(function(){
   $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
 
@@ -98,7 +105,7 @@ $(function(){
       if ($('#btnExport').length === 0) {
         $len.append('<button id="btnExport" class="btn btn-sm btn-success">Export Excel</button>');
       }
-      if ($('#btnDelAll').length === 0) {
+      if (IS_SUPER && $('#btnDelAll').length === 0) {
         $len.append('<button id="btnDelAll" class="btn btn-sm btn-danger">Hapus Semua (sesuai filter)</button>');
       }
     }

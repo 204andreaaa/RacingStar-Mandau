@@ -30,6 +30,7 @@ Route::post('/logout', [ManualAuthController::class, 'logout'])->name('logout');
 |--------------------------------------------------------------------------
 */
 Route::middleware('manual.auth')->group(function () {
+    
 
     // ---------------------------
     // TEKNISI AREA
@@ -67,7 +68,7 @@ Route::middleware('manual.auth')->group(function () {
         Route::get('/serpo/export', [SerpoController::class, 'export'])->name('serpo.export');
         Route::get('checklists/export', [AdminChecklistController::class, 'export'])->name('checklists.export');
         Route::get('checklists/allresult/export', [AdminChecklistController::class, 'exportAllResult'])->name('checklists.allresult.export');
-        Route::delete('checklists/destroy-all', [AdminChecklistController::class, 'destroyAll'])->name('checklists.destroyAll');
+        Route::delete('checklists/destroy-all', [AdminChecklistController::class, 'destroyAll'])->name('checklists.destroyAll')->middleware('superadmin.email');
         Route::get('user-bestrising/next-nik', [UserBestrisingController::class, 'nextNik'])->name('user-bestrising.nextNik');
 
 
@@ -78,8 +79,8 @@ Route::middleware('manual.auth')->group(function () {
 
         // Master data (kalau ini memang khusus admin)
         Route::resource('aktifitas',         ActivityController::class)->parameters(['aktifitas' => 'activity'])->names('aktifitas');
-        Route::resource('kategori-user',     KategoriUserController::class);
-        Route::resource('user-bestrising',   UserBestrisingController::class);
+        Route::resource('kategori-user',     KategoriUserController::class)->middleware('superadmin.email');
+        Route::resource('user-bestrising',   UserBestrisingController::class)->middleware('superadmin.email');
         Route::resource('region',            RegionController::class);
         Route::resource('serpo',             SerpoController::class);
         Route::resource('segmen',            SegmenController::class);

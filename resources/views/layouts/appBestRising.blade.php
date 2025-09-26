@@ -125,19 +125,23 @@
                         <p> HOME </p>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a href="{{ route('admin.user-bestrising.index') }}" class="nav-link">
-                        <i class="nav-icon fas fa-users"></i>
-                        <p> User </p>
-                    </a>
-                </li>
-
-                <li class="nav-item">
-                    <a href="{{ route('admin.kategori-user.index') }}" class="nav-link">
-                        <i class="nav-icon fas fa-user-tag"></i>
-                        <p> Kategori User </p>
-                    </a>
-                </li>
+                  @php
+                    $u = session('auth_user');
+                    $isSuper = isset($u['email']) && $u['email'] === 'superadmin@mandau.id';
+                  @endphp
+                  @if ($isSuper)
+                    <li class="nav-item">
+                        <a href="{{ route('admin.user-bestrising.index') }}" class="nav-link">
+                            <i class="nav-icon fas fa-users"></i>
+                            <p> User </p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                      <a href="{{ route('admin.kategori-user.index') }}" class="nav-link">
+                        <i class="nav-icon fas fa-user-tag"></i><p> Kategori User </p>
+                      </a>
+                    </li>
+                  @endif
 
                 <li class="nav-item">
                     <a href="{{ route('admin.region.index') }}" class="nav-link">
@@ -259,5 +263,17 @@
     });
   });
 </script>
+
+<script>
+  @if (session('forbidden'))
+    Swal.fire({
+      icon: 'warning',
+      title: 'Akses ditolak',
+      text: @json(session('forbidden')),
+      confirmButtonText: 'OK'
+    });
+  @endif
+</script>
+
 </body>
 </html>
