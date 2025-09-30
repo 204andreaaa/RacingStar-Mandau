@@ -143,7 +143,7 @@
       <div class="splash-logo">
         <img src="/images/mandau.png" alt="Logo" style="width:40px;height:40px;border-radius:50%;">
       </div>
-      <div class="splash-title">Mandau Racing Star</div>
+      <div class="splash-title">Mandau Racing Stars</div>
       <div class="splash-sub">Menyiapkan halaman...</div>
       <div class="spinner" aria-hidden="true"></div>
       <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -158,7 +158,7 @@
           <img src="/images/mandau.png" alt="" style="width: 50px; height: 50px;">
         </div>
         <div>
-          <div class="brand-title">Mandau Racing Star</div>
+          <div class="brand-title">Mandau Racing Stars</div>
           <div class="small-muted">Silakan masuk ke akun anda</div>
         </div>
       </a>
