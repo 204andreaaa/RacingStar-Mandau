@@ -42,7 +42,7 @@
           $already = isset($items) ? $items->firstWhere('activity_id', $a->id) : null;
           $isDone  = $already && $already->status === 'done';
 
-          // ← activity ini butuh foto atau tidak? (dari DB)
+          // kebutuhan foto
           $needPhoto = (bool) ($a->requires_photo ?? false);
 
           $period = $a->limit_period ?? 'none';
@@ -57,12 +57,26 @@
           $blocked = (bool)($u['blocked'] ?? false);
           $label   = $u['label'] ?? 'Tidak dibatasi';
 
-          // kalau item ini BELUM done & kuota penuh → lock checkbox (bukan field)
           $shouldDisable = !$isDone && $blocked;
+
+          // baseline untuk guard
+          $baselineNote   = trim($already->note ?? '');
+          $baselineSegmen = old('id_segmen.'.$a->id, $already->id_segmen ?? '');
+
+          // jumlah foto existing utk validasi
+          $existingBeforeCount = $already ? ($already->beforePhotos->count() ?? 0) : 0;
+          $existingAfterCount  = $already ? ($already->afterPhotos->count() ?? 0)  : 0;
         @endphp
 
         <div class="col-12">
-          <div class="card activity-card shadow-sm {{ $isDone ? 'border-success' : '' }}">
+          <div
+            class="card activity-card shadow-sm {{ $isDone ? 'border-success' : '' }}"
+            data-activity-id="{{ $a->id }}"
+            data-need-photo="{{ $needPhoto ? 1 : 0 }}"
+            data-needs-segmen="{{ $a->is_checked_segmen ? 1 : 0 }}"
+            data-existing-before="{{ $existingBeforeCount }}"
+            data-existing-after="{{ $existingAfterCount }}"
+          >
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
@@ -90,6 +104,7 @@
                           data-period="{{ $period }}"
                           data-used="{{ $used }}"
                           data-max="{{ $max === null ? '' : $max }}"
+                          data-initial="{{ $isDone ? 1 : 0 }}"
                           @if($isDone) checked @endif
                           @if($shouldDisable) disabled @endif
                           onchange="(function(cb){
@@ -117,7 +132,7 @@
 
                         {{-- existing photos (server) --}}
                         <div class="d-flex gap-2 align-items-start flex-wrap mb-1">
-                          @if($already && $already->beforePhotos->count())
+                          @if($existingBeforeCount > 0)
                             @foreach($already->beforePhotos as $pf)
                               @php $url = $toUrl($pf->path); @endphp
                               <a href="{{ $url }}" target="_blank">
@@ -130,7 +145,7 @@
                         </div>
 
                         {{-- smart uploader (client-side add incrementally) --}}
-                        <div class="smart-uploader" data-max="5">
+                        <div class="smart-uploader uploader-before" data-max="5" data-picked="0">
                           <div class="small text-muted mb-1 smart-files-label">Belum ada file dipilih.</div>
                           <div class="smart-thumbs d-flex gap-2 flex-wrap mb-2"></div>
                           <input
@@ -152,7 +167,7 @@
 
                         {{-- existing photos (server) --}}
                         <div class="d-flex gap-2 align-items-start flex-wrap mb-1">
-                          @if($already && $already->afterPhotos->count())
+                          @if($existingAfterCount > 0)
                             @foreach($already->afterPhotos as $pf)
                               @php $url = $toUrl($pf->path); @endphp
                               <a href="{{ $url }}" target="_blank">
@@ -165,7 +180,7 @@
                         </div>
 
                         {{-- smart uploader --}}
-                        <div class="smart-uploader" data-max="5">
+                        <div class="smart-uploader uploader-after" data-max="5" data-picked="0">
                           <div class="small text-muted mb-1 smart-files-label">Belum ada file dipilih.</div>
                           <div class="smart-thumbs d-flex gap-2 flex-wrap mb-2"></div>
                           <input
@@ -192,7 +207,12 @@
                     {{-- Catatan & Segmen tetap --}}
                     <div class="col-12">
                       <label class="form-label fw-semibold">Catatan/Lokasi</label>
-                      <textarea name="note[{{ $a->id }}]" class="form-control" rows="2" placeholder="opsional">{{ $already->note ?? '' }}</textarea>
+                      <textarea
+                        name="note[{{ $a->id }}]"
+                        class="form-control note-input"
+                        rows="2"
+                        data-initial="{{ $baselineNote }}"
+                        placeholder="opsional">{{ $already->note ?? '' }}</textarea>
                       @if($shouldDisable)
                         <div class="small text-danger mt-1">Kuota aktivitas ini sudah penuh {{ $label }} ({{ $used }}/{{ $max }}).</div>
                       @endif
@@ -206,6 +226,7 @@
                           id="id_segmen_{{ $a->id }}"
                           class="form-control br-control segmen-select select2"
                           data-selected="{{ old('id_segmen.'.$a->id, $already->id_segmen ?? '') }}"
+                          data-initial="{{ $baselineSegmen }}"
                           required>
                           <option value="">— pilih segmen —</option>
                           {{-- isi option segmen nanti lewat controller/ajax --}}
@@ -325,6 +346,9 @@ document.addEventListener('DOMContentLoaded', function(){
       });
       // sync to input
       input.files = dt.files;
+
+      // ← tandai jumlah file yang dipilih (untuk deteksi perubahan & validasi)
+      wrap.dataset.picked = String(files.length);
     }
 
     input.addEventListener('change', function(){
@@ -334,7 +358,6 @@ document.addEventListener('DOMContentLoaded', function(){
         const key = `${f.name}|${f.size}|${f.lastModified}`;
         if (!existing.has(key) && dt.files.length < max) {
           dt.items.add(f);
-          existing.add(key);
         }
         if (dt.files.length >= max) break;
       }
@@ -427,18 +450,144 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
+  // === VALIDATOR WAJIB KETIKA DONE ===
+  function validateBeforeSubmit(){
+    const cards = document.querySelectorAll('.activity-card');
+    for (const card of cards) {
+      const cb = card.querySelector('.toggle-done');
+      if (!cb || !cb.checked || cb.disabled) continue; // validasi hanya kalau Done dicentang
+
+      const needPhoto   = card.dataset.needPhoto === '1';
+      const needsSegmen = card.dataset.needsSegmen === '1';
+
+      // segmen wajib?
+      if (needsSegmen) {
+        const seg = card.querySelector('select.segmen-select');
+        if (!seg || !seg.value) {
+          // fokus segmen
+          if (seg && seg.scrollIntoView) seg.scrollIntoView({behavior:'smooth', block:'center'});
+          Swal && Swal.fire({icon:'warning', title:'Segmen belum dipilih', text:'Pilih segmen terlebih dahulu untuk aktivitas yang ditandai Done.'});
+          return false;
+        }
+      }
+
+      // foto wajib?
+      if (needPhoto) {
+        const existingBefore = parseInt(card.dataset.existingBefore || '0', 10);
+        const existingAfter  = parseInt(card.dataset.existingAfter  || '0', 10);
+
+        const upBefore = card.querySelector('.smart-uploader.uploader-before');
+        const upAfter  = card.querySelector('.smart-uploader.uploader-after');
+        const pickedBefore = parseInt((upBefore && upBefore.dataset.picked) || '0', 10);
+        const pickedAfter  = parseInt((upAfter  && upAfter.dataset.picked)  || '0', 10);
+
+        const totalBefore = existingBefore + pickedBefore;
+        const totalAfter  = existingAfter  + pickedAfter;
+
+        if (totalBefore < 1 || totalAfter < 1) {
+          // fokus ke uploader yang kurang
+          const target = (totalBefore < 1 ? upBefore : upAfter) || card;
+          target && target.scrollIntoView && target.scrollIntoView({behavior:'smooth', block:'center'});
+          Swal && Swal.fire({icon:'warning', title:'Foto belum lengkap', text:'Aktivitas bertanda Done wajib memiliki minimal 1 foto Before dan 1 foto After.'});
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   if (btnSave) {
-    btnSave.addEventListener('click', function(){
+    btnSave.addEventListener('click', function(e){
+      // stop dulu; validasi → kalau lolos baru lanjutkan loading + mark
+      if (!validateBeforeSubmit()) { e.preventDefault(); return; }
       markAction('save');
       showLoading();
     });
   }
   if (btnFinish) {
-    btnFinish.addEventListener('click', function(){
+    btnFinish.addEventListener('click', function(e){
+      if (!validateBeforeSubmit()) { e.preventDefault(); return; }
       markAction('finish');
       showLoading();
     });
   }
+
+  // === GUARD: cegah submit jika tidak ada perubahan + toggle tombol ===
+  (function(){
+    function activityChanged(card){
+      // checkbox done
+      const cb = card.querySelector('.toggle-done');
+      if (cb) {
+        const init = String(cb.dataset.initial ?? '');
+        const now  = cb.checked ? '1' : '0';
+        if (init !== now) return true;
+      }
+
+      // note
+      const note = card.querySelector('.note-input');
+      if (note) {
+        const init = String(note.dataset.initial ?? '').trim();
+        const now  = String(note.value ?? '').trim();
+        if (init !== now) return true;
+      }
+
+      // segmen
+      const seg = card.querySelector('select.segmen-select');
+      if (seg) {
+        const init = String(seg.dataset.initial ?? '');
+        const now  = String(seg.value ?? '');
+        if (init !== now) return true;
+      }
+
+      // file baru dipilih? (before/after)
+      const uploaders = card.querySelectorAll('.smart-uploader');
+      for (const up of uploaders) {
+        const picked = parseInt(up.dataset.picked || '0', 10);
+        if (picked > 0) return true;
+      }
+
+      return false;
+    }
+
+    function hasAnyChange(){
+      const cards = document.querySelectorAll('.activity-card');
+      for (const c of cards) {
+        if (activityChanged(c)) return true;
+      }
+      return false;
+    }
+
+    function setButtonsState(){
+      const changed = hasAnyChange();
+      if (btnSave)   btnSave.disabled   = !changed;
+      if (btnFinish) btnFinish.disabled = !changed;
+    }
+
+    // initial state
+    setButtonsState();
+
+    // pantau perubahan input2 utama
+    document.addEventListener('input',  setButtonsState, true);
+    document.addEventListener('change', setButtonsState, true);
+
+    // intercept submit: selain "ada perubahan", juga validasi wajib isi saat Done
+    form.addEventListener('submit', function(e){
+      if (!hasAnyChange()) {
+        e.preventDefault();
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({ icon: 'info', title: 'Tidak ada perubahan', text: 'Tidak ada data yang diupdate. Lakukan perubahan dulu sebelum menyimpan.' });
+        } else {
+          alert('Tidak ada data yang diupdate. Lakukan perubahan dulu sebelum menyimpan.');
+        }
+        return;
+      }
+      if (!validateBeforeSubmit()) {
+        e.preventDefault();
+        return;
+      }
+    });
+  })();
+
 });
 </script>
 

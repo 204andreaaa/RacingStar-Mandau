@@ -77,7 +77,7 @@ class KategoriUserAndUserSeeder extends Seeder
                         'id_serpo'         => null,
                         ]
                     );
-                
+                    $superAdmin->segmens()->sync([]); // admin tidak punya segmen
             // Admin
                 $admin = UserBestrising::firstOrCreate(
                     ['email' => 'admin@mandau.id'],
@@ -91,9 +91,7 @@ class KategoriUserAndUserSeeder extends Seeder
                     ]
                 );
                 $admin->segmens()->sync([]);
-                $superAdmin->segmens()->sync([]); // admin tidak punya segmen
         });
-
         $this->command?->info('Seeded: kategoriuser, region/serpo/segmen contoh, dan 1 users (Admin) dengan relasi segmen via pivot.');
     }
 }
