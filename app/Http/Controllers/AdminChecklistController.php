@@ -140,17 +140,44 @@ class AdminChecklistController extends Controller
                 ->when($request->team,      fn($qq) => $qq->where('team', $request->team))
                 ->when($request->status,    fn($qq) => $qq->where('status', $request->status))
                 ->when($request->date_from, fn($qq) => $qq->whereDate('started_at', '>=', $request->date_from))
-                ->when($request->date_to,   fn($qq) => $qq->whereDate('started_at', '<=', $request->date_to))
-                ->orderByDesc('started_at');
+                ->when($request->date_to,   fn($qq) => $qq->whereDate('started_at', '<=', $request->date_to));
+
+            // === Robust filter: Region ===
+            if ($request->filled('region')) {
+                $region = (int) $request->region;
+                if (\Schema::hasColumn('checklists', 'region_id')) {
+                    $q->where('region_id', $region);
+                } elseif (\Schema::hasColumn('checklists', 'id_region')) {
+                    $q->where('id_region', $region);
+                } else {
+                    // fallback via relasi user (kolom di user_bestrising)
+                    $q->whereHas('user', fn($u) => $u->where('id_region', $region));
+                }
+            }
+
+            // === Robust filter: Serpo ===
+            if ($request->filled('serpo')) {
+                $serpo = (int) $request->serpo;
+                if (\Schema::hasColumn('checklists', 'serpo_id')) {
+                    $q->where('serpo_id', $serpo);
+                } elseif (\Schema::hasColumn('checklists', 'id_serpo')) {
+                    $q->where('id_serpo', $serpo);
+                } else {
+                    // fallback via relasi user (kolom di user_bestrising)
+                    $q->whereHas('user', fn($u) => $u->where('id_serpo', $serpo));
+                }
+            }
+
+            $q->orderByDesc('started_at');
 
             return DataTables::of($q)
                 ->addIndexColumn()
                 ->editColumn('started_at',   fn($row) => optional($row->started_at)->format('Y-m-d H:i:s'))
                 ->editColumn('submitted_at', fn($row) => optional($row->submitted_at)->format('Y-m-d H:i:s'))
-                ->addColumn('user_nama',     fn($row) => $row->user->nama ?? '-')
+                ->addColumn('user_nama',     fn($row) => $row->user->nama ?? $row->user->email ?? '-')
                 ->addColumn('lokasi', function($row){
-                    $region = $row->region->nama_region ?? '-';
-                    $serpo  = $row->serpo->nama_serpo   ?? '-';
+                    $region = $row->region->nama_region ?? ($row->user->region->nama_region ?? '-');
+                    $serpo  = $row->serpo->nama_serpo   ?? ($row->user->serpo->nama_serpo   ?? '-');
                     return "{$region} / {$serpo}";
                 })
                 ->addColumn('action', function($row){
@@ -164,6 +191,7 @@ class AdminChecklistController extends Controller
 
         return view('bestRising.admin.checklists.index');
     }
+
 
     public function show($id)
     {
@@ -265,20 +293,48 @@ class AdminChecklistController extends Controller
         $dateTo   = $request->input('date_to');
         $search   = $request->input('search');
 
+        // 🔹 NEW: ambil filter lokasi dari UI
+        $regionId = $request->filled('region') ? (int) $request->input('region') : null;
+        $serpoId  = $request->filled('serpo')  ? (int) $request->input('serpo')  : null;
+
         $checklistQuery = Checklist::query()
             ->when($team,     fn($q) => $q->where('team', $team))
             ->when($status,   fn($q) => $q->where('status', $status))
             ->when($dateFrom, fn($q) => $q->whereDate('started_at', '>=', $dateFrom))
             ->when($dateTo,   fn($q) => $q->whereDate('started_at', '<=', $dateTo));
 
+        // 🔹 NEW: robust filter REGION
+        if ($regionId) {
+            if (Schema::hasColumn('checklists', 'region_id')) {
+                $checklistQuery->where('region_id', $regionId);
+            } elseif (Schema::hasColumn('checklists', 'id_region')) {
+                $checklistQuery->where('id_region', $regionId);
+            } else {
+                // fallback via relasi user (kolom ada di user_bestrising)
+                $checklistQuery->whereHas('user', fn($u) => $u->where('id_region', $regionId));
+            }
+        }
+
+        // 🔹 NEW: robust filter SERPO
+        if ($serpoId) {
+            if (Schema::hasColumn('checklists', 'serpo_id')) {
+                $checklistQuery->where('serpo_id', $serpoId);
+            } elseif (Schema::hasColumn('checklists', 'id_serpo')) {
+                $checklistQuery->where('id_serpo', $serpoId);
+            } else {
+                $checklistQuery->whereHas('user', fn($u) => $u->where('id_serpo', $serpoId));
+            }
+        }
+
+        // 🔹 Pencarian global (tetap)
         if ($search) {
             $kw = '%'.$search.'%';
             $checklistQuery->where(function($qq) use ($kw) {
                 $qq->whereHas('user',   fn($u) => $u->where('nama','like',$kw)->orWhere('email','like',$kw))
-                   ->orWhereHas('region',fn($r) => $r->where('nama_region','like',$kw))
-                   ->orWhereHas('serpo', fn($s) => $s->where('nama_serpo','like',$kw))
-                   ->orWhere('team','like',$kw)
-                   ->orWhere('status','like',$kw);
+                ->orWhereHas('region',fn($r) => $r->where('nama_region','like',$kw))
+                ->orWhereHas('serpo', fn($s) => $s->where('nama_serpo','like',$kw))
+                ->orWhere('team','like',$kw)
+                ->orWhere('status','like',$kw);
             });
         }
 
@@ -293,6 +349,7 @@ class AdminChecklistController extends Controller
 
         $checklistIds = $checklists->pluck('id')->all();
 
+        // --- sisanya tetap seperti punyamu ---
         $activityResultIds = DB::table('activity_results')
             ->whereIn('checklist_id', $checklistIds)
             ->pluck('id')
@@ -307,7 +364,6 @@ class AdminChecklistController extends Controller
                 ->map(fn($p) => ltrim($p,'/'))
                 ->all();
 
-            // cek kolom legacy
             $hasBefore = Schema::hasColumn('activity_results','before_photo');
             $hasAfter  = Schema::hasColumn('activity_results','after_photo');
             if ($hasBefore || $hasAfter) {
@@ -354,7 +410,7 @@ class AdminChecklistController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Seluruh data & file foto terkait berhasil dihapus.',
+                'message' => 'Seluruh data & file foto terkait sesuai filter berhasil dihapus.',
                 'deleted' => $deleted,
             ]);
         } catch (\Throwable $e) {
@@ -362,4 +418,5 @@ class AdminChecklistController extends Controller
             return response()->json(['success'=>false,'message'=>'Gagal menghapus massal: '.$e->getMessage()], 500);
         }
     }
+
 }
