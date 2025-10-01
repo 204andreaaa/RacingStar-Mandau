@@ -8,6 +8,7 @@
         <div class="card-header d-flex align-items-center">
             <h3 class="mb-0">Data Segmen</h3>
             <div class="ms-auto ml-auto d-flex gap-2">
+              <button class="btn btn-outline-secondary mr-2" id="btnExport">Export</button>
               <button class="btn btn-outline-primary mr-2" id="btnAddBulk">Tambah Banyak</button>
               <button class="btn btn-primary" id="btnAdd">Tambah Segmen</button>
             </div>
@@ -144,12 +145,13 @@ $(function(){
 
   // --- route helper dari Blade (pakai placeholder utk id) ---
   const ROUTES = {
-    serpoByRegion : "{{ route('admin.serpo.byRegion', ['id_region' => 'RID']) }}",
-    segmenIndex   : "{{ route('admin.segmen.index') }}",
-    segmenStore   : "{{ route('admin.segmen.store') }}",
-    segmenUpdate  : "{{ route('admin.segmen.update', ':id') }}",
-    segmenDestroy : "{{ route('admin.segmen.destroy', ':id') }}",
+    serpoByRegion   : "{{ route('admin.serpo.byRegion', ['id_region' => 'RID']) }}",
+    segmenIndex     : "{{ route('admin.segmen.index') }}",
+    segmenStore     : "{{ route('admin.segmen.store') }}",
+    segmenUpdate    : "{{ route('admin.segmen.update', ':id') }}",
+    segmenDestroy   : "{{ route('admin.segmen.destroy', ':id') }}",
     segmenBulkStore : "{{ route('admin.segmen.bulkStore') }}",
+    segmenExport    : "{{ route('admin.segmen.export') }}", // <— TAMBAHAN
   };
   const urlUpdate   = id => ROUTES.segmenUpdate.replace(':id', id);
   const urlDestroy  = id => ROUTES.segmenDestroy.replace(':id', id);
@@ -237,7 +239,7 @@ $(function(){
     }
 
     $('#modalSegmen').modal('show');
-  });                                                   
+  });
 
   // Edit single
   $(document).on('click','.btn-edit', function(){
@@ -341,6 +343,18 @@ $(function(){
       .always(() => {
         $('#btnBulkSave').prop('disabled', false).text('Import');
       });
+  });
+
+  // ===== EXPORT ===== (TAMBAHAN)
+  $('#btnExport').on('click', function(){
+    const id_region = $('#filter_region').val() || '';
+    const id_serpo  = $('#filter_serpo').val() || '';
+    const q = $('div.dataTables_filter input[type=search]').val() || '';
+    const url = new URL(ROUTES.segmenExport, window.location.origin);
+    if (id_region) url.searchParams.set('id_region', id_region);
+    if (id_serpo)  url.searchParams.set('id_serpo',  id_serpo);
+    if (q)         url.searchParams.set('q',         q);
+    window.location.href = url.toString();
   });
 
 });

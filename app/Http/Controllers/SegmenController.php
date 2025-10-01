@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\SegmenExport;
 
 class SegmenController extends Controller
 {
@@ -54,6 +56,18 @@ class SegmenController extends Controller
             'regions' => Region::orderBy('nama_region')->get(),
             'serpos'  => Serpo::orderBy('nama_serpo')->get(),
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $id_region = $request->query('id_region');
+        $id_serpo  = $request->query('id_serpo');
+        $keyword   = $request->query('q'); // dari pencarian DataTables
+
+        $ts = now()->format('Ymd_His');
+        $filename = "segmen_{$ts}.xlsx";
+
+        return Excel::download(new SegmenExport($id_region, $id_serpo, $keyword), $filename);
     }
 
     public function store(Request $request)
