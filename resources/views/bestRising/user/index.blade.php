@@ -35,11 +35,6 @@
                     <span id="clock"></span>
                 </div>
             </div>
-            <div class="mt-2 mt-md-0">
-                <a href="{{ $helpUrl }}" class="btn btn-outline-success">
-                    <i class="fas fa-question-circle mr-1"></i> Bantuan
-                </a>
-            </div>
         </div>
     </section>
 

@@ -140,7 +140,7 @@
 
 <footer class="main-footer" style="display: flex; justify-content: center; align-items: center; text-align: center;">
     <div>
-        <b>Version</b> 3.2.0 |
+        <b>Version</b> 1.0 |
         <strong>Copyright &copy; 2025-now 
             <a href="https://mandau.id">Mandau</a>.
         </strong> All rights reserved.
