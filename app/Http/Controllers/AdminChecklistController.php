@@ -7,15 +7,29 @@ use App\Exports\ChecklistsExport;
 use App\Models\Checklist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;   // ← tambah: cek kolom legacy
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
 
 class AdminChecklistController extends Controller
 {
+    /**
+     * Ambil ID region dari session auth_user (kalau ada).
+     */
+    private function sessionRegionId(): ?int
+    {
+        // Sesuaikan key jika beda: 'id_region' di session('auth_user')
+        $rid = data_get(session('auth_user'), 'id_region');
+        if (is_null($rid) || $rid === '') return null;
+        return (int) $rid;
+    }
+
     public function allresult(Request $request)
     {
+        // Ambil region dari session → untuk scoping
+        $sessionRegionId = $this->sessionRegionId();
+
         if ($request->ajax()) {
             // Subquery foto
             $beforeListSub = DB::table('activity_result_photos')
@@ -44,27 +58,34 @@ class AdminChecklistController extends Controller
                     DB::raw('COALESCE(r.nama_region, "-") as region_nama'),
                     DB::raw('COALESCE(sp.nama_serpo, "-") as serpo_nama'),
                     DB::raw('COALESCE(sg.nama_segmen, "-") as segmen_nama'),
-                    DB::raw('sg.id_segmen as segmen_id'), // ← ikutkan id segmen buat debug/keperluan lain
+                    DB::raw('sg.id_segmen as segmen_id'),
                     DB::raw('bfl.before_list'),
                     DB::raw('afl.after_list'),
                 ]);
 
-            // === FILTERS ===
-            if ($request->filled('region')) $q->where('u.id_region', (int) $request->region);
+            // === ENFORCE REGION BY SESSION ===
+            if (!is_null($sessionRegionId)) {
+                $q->where('u.id_region', $sessionRegionId);
+            }
+
+            // === FILTERS (request) ===
+            // Region: hanya dipakai kalau sessionRegionId null
+            if (is_null($sessionRegionId) && $request->filled('region')) {
+                $q->where('u.id_region', (int) $request->region);
+            }
             if ($request->filled('serpo'))  $q->where('u.id_serpo',  (int) $request->serpo);
 
-            // SEGMENT: mode strict
+            // Segmen
             if ($request->filled('segmen')) {
                 $segmenVal = (int) $request->segmen;
                 if ($segmenVal === 0) {
-                    // Opsional: kalau di dropdown kamu sediakan "Tanpa Segmen" (value 0)
                     $q->whereNull('ar.id_segmen');
                 } else {
-                    // STRICT: hanya baris yang memang punya id segmen tsb
                     $q->where('ar.id_segmen', $segmenVal);
                 }
             }
 
+            // Tanggal
             if ($request->filled('date_from') || $request->filled('date_to')) {
                 $from = $request->date_from; $to = $request->date_to;
                 if ($from && $to) $q->whereBetween(DB::raw('DATE(ar.submitted_at)'), [$from, $to]);
@@ -72,14 +93,15 @@ class AdminChecklistController extends Controller
                 elseif ($to)     $q->whereDate('ar.submitted_at', '<=', $to);
             }
 
+            // Keyword
             if ($request->filled('keyword')) {
                 $kw = '%'.$request->keyword.'%';
                 $q->where(function ($w) use ($kw) {
                     $w->where('u.nama','like',$kw)
-                    ->orWhere('u.email','like',$kw)
-                    ->orWhere('act.name','like',$kw)
-                    ->orWhere('r.nama_region','like',$kw)
-                    ->orWhere('sp.nama_serpo','like',$kw);
+                      ->orWhere('u.email','like',$kw)
+                      ->orWhere('act.name','like',$kw)
+                      ->orWhere('r.nama_region','like',$kw)
+                      ->orWhere('sp.nama_serpo','like',$kw);
                 });
             }
 
@@ -99,35 +121,55 @@ class AdminChecklistController extends Controller
                 ->editColumn('created_at', fn($r) => $r->created_at ? \Carbon\Carbon::parse($r->created_at)->format('Y-m-d H:i:s') : '-')
                 ->addColumn('before_photos', function ($r) {
                     if (!$r->before_list) return '-';
-                    $pieces = [];
+                    $items = [];
                     foreach (explode('|', $r->before_list) as $path) {
-                        if (!$path) continue;
+                        $path = trim($path ?? '');
+                        if ($path === '') continue;
                         $url = asset('storage/'.ltrim($path,'/'));
-                        $pieces[] = '<a href="'.$url.'" target="_blank" class="photo-item" title="Before"><img src="'.$url.'" class="thumb-img" alt="before"><span class="photo-badge">B</span></a>';
+                        $items[] =
+                            '<div class="photo-item" title="Before">'.
+                            '<img src="'.$url.'" data-full="'.$url.'" class="thumb-img" alt="before">'.
+                            '<span class="photo-badge">B</span>'.
+                            '</div>';
                     }
-                    return '<div class="photo-scroller">'.$pieces[0].implode('', array_slice($pieces,1)).'</div>';
+                    return '<div class="photo-scroller">'.implode('', $items).'</div>';
                 })
                 ->addColumn('after_photos', function ($r) {
                     if (!$r->after_list) return '-';
-                    $pieces = [];
+                    $items = [];
                     foreach (explode('|', $r->after_list) as $path) {
-                        if (!$path) continue;
+                        $path = trim($path ?? '');
+                        if ($path === '') continue;
                         $url = asset('storage/'.ltrim($path,'/'));
-                        $pieces[] = '<a href="'.$url.'" target="_blank" class="photo-item" title="After"><img src="'.$url.'" class="thumb-img" alt="after"><span class="photo-badge">A</span></a>';
+                        $items[] =
+                            '<div class="photo-item" title="After">'.
+                            '<img src="'.$url.'" data-full="'.$url.'" class="thumb-img" alt="after">'.
+                            '<span class="photo-badge">A</span>'.
+                            '</div>';
                     }
-                    return '<div class="photo-scroller">'.$pieces[0].implode('', array_slice($pieces,1)).'</div>';
+                    return '<div class="photo-scroller">'.implode('', $items).'</div>';
                 })
                 ->rawColumns(['before_photos','after_photos'])
                 ->make(true);
         }
 
-        return view('bestRising.admin.checklists.allresult');
+        // Kirim sessionRegionId ke view buat preselect & lock filter Region
+        return view('bestRising.admin.checklists.allresult', [
+            'sessionRegionId' => $sessionRegionId,
+        ]);
     }
-
 
     public function exportAllResult(Request $request)
     {
-        $filters  = $request->only(['region','serpo','segmen','date_from','date_to','keyword']);
+        // Pastikan export juga respect scoping region session
+        $sessionRegionId = $this->sessionRegionId();
+
+        // Gabung filter request, lalu override region jika sessionRegionId ada
+        $filters = $request->only(['region','serpo','segmen','date_from','date_to','keyword']);
+        if (!is_null($sessionRegionId)) {
+            $filters['region'] = $sessionRegionId; // paksa region sesuai session
+        }
+
         $filename = 'all-results-'.now()->format('Ymd_His').'.xlsx';
         return Excel::download(new AllResultsExport($filters), $filename);
     }
@@ -142,7 +184,7 @@ class AdminChecklistController extends Controller
                 ->when($request->date_from, fn($qq) => $qq->whereDate('started_at', '>=', $request->date_from))
                 ->when($request->date_to,   fn($qq) => $qq->whereDate('started_at', '<=', $request->date_to));
 
-            // === Robust filter: Region ===
+            // robust region filter (tidak diubah -> bukan fokus halaman ini)
             if ($request->filled('region')) {
                 $region = (int) $request->region;
                 if (\Schema::hasColumn('checklists', 'region_id')) {
@@ -150,12 +192,11 @@ class AdminChecklistController extends Controller
                 } elseif (\Schema::hasColumn('checklists', 'id_region')) {
                     $q->where('id_region', $region);
                 } else {
-                    // fallback via relasi user (kolom di user_bestrising)
                     $q->whereHas('user', fn($u) => $u->where('id_region', $region));
                 }
             }
 
-            // === Robust filter: Serpo ===
+            // robust serpo filter
             if ($request->filled('serpo')) {
                 $serpo = (int) $request->serpo;
                 if (\Schema::hasColumn('checklists', 'serpo_id')) {
@@ -163,7 +204,6 @@ class AdminChecklistController extends Controller
                 } elseif (\Schema::hasColumn('checklists', 'id_serpo')) {
                     $q->where('id_serpo', $serpo);
                 } else {
-                    // fallback via relasi user (kolom di user_bestrising)
                     $q->whereHas('user', fn($u) => $u->where('id_serpo', $serpo));
                 }
             }
@@ -192,7 +232,6 @@ class AdminChecklistController extends Controller
         return view('bestRising.admin.checklists.index');
     }
 
-
     public function show($id)
     {
         $checklist = Checklist::with(['user','region','serpo','segmen','items'])->findOrFail($id);
@@ -209,7 +248,6 @@ class AdminChecklistController extends Controller
             ->pluck('id')
             ->all();
 
-        // kumpulkan path foto (dari tabel photos)
         $photoPaths = [];
         if (!empty($activityResultIds)) {
             $photoPaths = DB::table('activity_result_photos')
@@ -219,7 +257,6 @@ class AdminChecklistController extends Controller
                 ->map(fn($p) => ltrim($p,'/'))
                 ->all();
 
-            // tambahkan legacy hanya jika kolomnya ada
             $hasBefore = Schema::hasColumn('activity_results','before_photo');
             $hasAfter  = Schema::hasColumn('activity_results','after_photo');
             if ($hasBefore || $hasAfter) {
@@ -263,7 +300,7 @@ class AdminChecklistController extends Controller
         }
     }
 
-    /** Export Excel */
+    /** Export Excel (daftar checklist) – tidak diubah */
     public function export(Request $req)
     {
         $filename = 'checklists_'.now()->format('Ymd_His').'.xlsx';
@@ -281,7 +318,8 @@ class AdminChecklistController extends Controller
     }
 
     /**
-     * HAPUS MASSAL sesuai filter + bersihkan semua file foto (public disk).
+     * HAPUS MASSAL sesuai filter (tidak diubah logikanya di sini).
+     * Kalau mau ikut enforce region session, tinggal tambahkan seperti di allresult().
      */
     public function destroyAll(Request $request)
     {
@@ -293,7 +331,6 @@ class AdminChecklistController extends Controller
         $dateTo   = $request->input('date_to');
         $search   = $request->input('search');
 
-        // 🔹 NEW: ambil filter lokasi dari UI
         $regionId = $request->filled('region') ? (int) $request->input('region') : null;
         $serpoId  = $request->filled('serpo')  ? (int) $request->input('serpo')  : null;
 
@@ -303,19 +340,16 @@ class AdminChecklistController extends Controller
             ->when($dateFrom, fn($q) => $q->whereDate('started_at', '>=', $dateFrom))
             ->when($dateTo,   fn($q) => $q->whereDate('started_at', '<=', $dateTo));
 
-        // 🔹 NEW: robust filter REGION
         if ($regionId) {
             if (Schema::hasColumn('checklists', 'region_id')) {
                 $checklistQuery->where('region_id', $regionId);
             } elseif (Schema::hasColumn('checklists', 'id_region')) {
                 $checklistQuery->where('id_region', $regionId);
             } else {
-                // fallback via relasi user (kolom ada di user_bestrising)
                 $checklistQuery->whereHas('user', fn($u) => $u->where('id_region', $regionId));
             }
         }
 
-        // 🔹 NEW: robust filter SERPO
         if ($serpoId) {
             if (Schema::hasColumn('checklists', 'serpo_id')) {
                 $checklistQuery->where('serpo_id', $serpoId);
@@ -326,15 +360,14 @@ class AdminChecklistController extends Controller
             }
         }
 
-        // 🔹 Pencarian global (tetap)
         if ($search) {
             $kw = '%'.$search.'%';
             $checklistQuery->where(function($qq) use ($kw) {
                 $qq->whereHas('user',   fn($u) => $u->where('nama','like',$kw)->orWhere('email','like',$kw))
-                ->orWhereHas('region',fn($r) => $r->where('nama_region','like',$kw))
-                ->orWhereHas('serpo', fn($s) => $s->where('nama_serpo','like',$kw))
-                ->orWhere('team','like',$kw)
-                ->orWhere('status','like',$kw);
+                   ->orWhereHas('region',fn($r) => $r->where('nama_region','like',$kw))
+                   ->orWhereHas('serpo', fn($s) => $s->where('nama_serpo','like',$kw))
+                   ->orWhere('team','like',$kw)
+                   ->orWhere('status','like',$kw);
             });
         }
 
@@ -349,7 +382,6 @@ class AdminChecklistController extends Controller
 
         $checklistIds = $checklists->pluck('id')->all();
 
-        // --- sisanya tetap seperti punyamu ---
         $activityResultIds = DB::table('activity_results')
             ->whereIn('checklist_id', $checklistIds)
             ->pluck('id')
@@ -418,5 +450,4 @@ class AdminChecklistController extends Controller
             return response()->json(['success'=>false,'message'=>'Gagal menghapus massal: '.$e->getMessage()], 500);
         }
     }
-
 }

@@ -104,13 +104,16 @@ class UserBestrisingController extends Controller
         $katName = $this->kategoriNameUpper($request->input('kategori_user_id'));
 
         if (str_contains($katName, 'ADMIN')) {
-            // tidak butuh region/serpo/segmen
+            // ADMIN sekarang wajib Region
+            $base['id_region'] = ['required','integer'];
+            // id_serpo tidak digunakan oleh ADMIN
         } elseif (str_contains($katName, 'SERPO')) {
             $base['id_region'] = ['required','integer'];
             $base['id_serpo']  = ['required','integer'];
             // segmen auto oleh backend → tidak divalidasi dari request
         } elseif (str_contains($katName, 'NOC')) {
             $base['id_region'] = ['required','integer'];
+            // id_serpo tidak digunakan oleh NOC
         }
 
         return $request->validate($base);
@@ -123,7 +126,7 @@ class UserBestrisingController extends Controller
 
         // Normalisasi field sesuai kategori
         if (str_contains($katName, 'ADMIN')) {
-            $data['id_region'] = null;
+            // ADMIN: wajib Region, Serpo null
             $data['id_serpo']  = null;
         } elseif (str_contains($katName, 'NOC')) {
             $data['id_serpo']  = null;
@@ -172,7 +175,8 @@ class UserBestrisingController extends Controller
         }
 
         if (str_contains($katName, 'ADMIN')) {
-            $payload['id_region'] = null;
+            // ADMIN: simpan Region, Serpo null
+            $payload['id_region'] = $data['id_region'] ?? null;
             $payload['id_serpo']  = null;
         } elseif (str_contains($katName, 'SERPO')) {
             $payload['id_region'] = $data['id_region'] ?? null;

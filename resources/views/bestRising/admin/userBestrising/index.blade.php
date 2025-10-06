@@ -145,7 +145,7 @@ $(function(){
         destroy : "{{ route('admin.user-bestrising.destroy', ':id') }}",
         serpoByRegion : "{{ route('admin.serpo.byRegion', ['id_region' => 'RID']) }}",
         segmenBySerpo : "{{ route('admin.segmen.bySerpo', ['id_serpo' => 'SID']) }}",
-        nextNik : "{{ route('admin.user-bestrising.nextNik') }}", // ← baru
+        nextNik : "{{ route('admin.user-bestrising.nextNik') }}",
     };
     const urlUpdate   = id => ROUTES.update.replace(':id', id);
     const urlDestroy  = id => ROUTES.destroy.replace(':id', id);
@@ -191,7 +191,11 @@ $(function(){
         setRequired($segmen, false);
 
         if (text.includes('ADMIN')) {
-            $region.val('');
+            // ADMIN sekarang WAJIB pilih Region
+            $('.field-region').removeClass('d-none');
+            setRequired($region, true);
+
+            // Serpo & Segmen tetap tidak dipakai untuk ADMIN
             $serpo.empty().append('<option value="">-- Pilih Serpo --</option>').val('');
             $segmen.empty();
         } else if (text.includes('SERPO')) {
@@ -202,7 +206,7 @@ $(function(){
             // segmen di-hide (auto backend)
             $segmen.empty();
         } else if (text.includes('NOC')) {
-            // hanya region
+            // hanya region (wajib)
             $('.field-region').removeClass('d-none');
             setRequired($region, true);
             $serpo.empty().append('<option value="">-- Pilih Serpo --</option>');
@@ -238,7 +242,8 @@ $(function(){
 
     $('#form_region').on('change', function(){
         const kat = ($('#kategori_user_id option:selected').text()||'').toUpperCase();
-        if (kat.includes('NOC')) {
+        if (kat.includes('NOC') || kat.includes('ADMIN')) {
+            // ADMIN & NOC tidak pakai serpo/segmen
             $serpo.empty().append('<option value="">-- Pilih Serpo --</option>');
             $segmen.empty();
             return;

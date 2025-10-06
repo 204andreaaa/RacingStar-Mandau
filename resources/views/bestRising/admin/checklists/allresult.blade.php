@@ -88,13 +88,46 @@
 
 </div>
 
+{{-- =========================
+     MODAL + CAROUSEL PREVIEW
+   ========================= --}}
+<div class="modal fade" id="photoModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content border-0">
+      <div class="modal-header">
+        <h5 class="modal-title" id="photoModalTitle">Preview</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body p-0">
+        <div id="photoCarousel" class="carousel slide" data-ride="carousel" data-interval="0" data-keyboard="true">
+          <ol class="carousel-indicators"></ol>
+          <div class="carousel-inner"></div>
+          <a class="carousel-control-prev" href="#photoCarousel" role="button" data-slide="prev">
+            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            <span class="sr-only">Prev</span>
+          </a>
+          <a class="carousel-control-next" href="#photoCarousel" role="button" data-slide="next">
+            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            <span class="sr-only">Next</span>
+          </a>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <small class="text-muted" id="photoCaption"></small>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   .thumb-img{
     width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid rgba(0,0,0,.12);
+    cursor:pointer;
   }
   table.dataTable td, table.dataTable th { vertical-align: middle; }
 
-  /* Scroller per kolom */
   .photo-scroller{
     display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;
     scroll-snap-type:x proximity; max-width:220px;
@@ -106,9 +139,39 @@
     position:absolute; left:4px; bottom:4px; background:rgba(0,0,0,.6);
     color:#fff; font-size:10px; padding:1px 4px; border-radius:3px; line-height:1;
   }
+  #photoCarousel .carousel-item{ background:#000; min-height:60vh; }
+  #photoCarousel .carousel-item img{
+    max-height:80vh; width:auto; height:auto; object-fit:contain; display:block; margin:auto;
+  }
+</style>
+<style>
+/* Modal viewer rapi */
+#photoModal .modal-dialog { max-width: 900px; }
+#photoModal .modal-content { background-color:#000; border:none; border-radius:10px; overflow:hidden; }
+#photoModal .modal-header { background:#111; color:#fff; border-bottom:none; padding:10px 15px; }
+#photoModal .modal-header .close { color:#fff; opacity:.8; font-size:26px; }
+#photoModal .modal-body { padding:0; position:relative; }
+#photoModal .modal-footer { background:#111; border-top:none; justify-content:center; color:#aaa; font-size:13px; }
+#photoCarousel .carousel-item { background:#000; min-height:70vh; }
+#photoCarousel .carousel-item.active,
+#photoCarousel .carousel-item-next,
+#photoCarousel .carousel-item-prev { display:flex; align-items:center; justify-content:center; transition:transform .4s ease; }
+#photoCarousel .carousel-item img { max-height:75vh; width:auto; object-fit:contain; box-shadow:0 0 10px rgba(0,0,0,.5); border-radius:4px; }
+#photoCarousel .carousel-control-prev, #photoCarousel .carousel-control-next { width:8%; }
+#photoCarousel .carousel-control-prev-icon, #photoCarousel .carousel-control-next-icon { filter: drop-shadow(0 0 4px rgba(0,0,0,.8)); }
+#photoCarousel .carousel-indicators { bottom:8px; }
+#photoCarousel .carousel-indicators li { background-color:#999; width:20px; height:4px; border-radius:2px; transition:all .3s ease; }
+#photoCarousel .carousel-indicators .active { background-color:#fff; width:30px; }
+.thumb-img { cursor:pointer; transition: transform .2s ease, box-shadow .2s ease; }
+.thumb-img:hover { transform:scale(1.05); box-shadow:0 2px 8px rgba(0,0,0,.25); }
 </style>
 
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
 <script>
+  // Inject dari controller
+  const SESSION_REGION_ID = {{ (int)($sessionRegionId ?? 0) }};
+
   function buildExportUrl(){
     const params = new URLSearchParams({
       region:    $('#f_region').val() || '',
@@ -138,6 +201,14 @@
           $select.append(`<option value="${id}">${text}</option>`);
         }
       });
+    }
+
+    // Jika session region ada → preset & lock region filter
+    if (SESSION_REGION_ID > 0) {
+      $('#f_region').val(String(SESSION_REGION_ID)).prop('disabled', true).trigger('change');
+      // preload serpo list buat region ini
+      $.get("{{ route('admin.serpo.byRegion', ['id_region' => 'IDR']) }}".replace('IDR', SESSION_REGION_ID))
+        .done(res => fillOptions($('#f_serpo'), (res?.data ?? res), 'Semua'));
     }
 
     // Dependent dropdowns
@@ -171,7 +242,8 @@
         url: "{{ route('admin.checklists.allresult') }}",
         type: 'GET',
         data: function(d){
-          d.region    = $('#f_region').val() || '';
+          // kalau session region ada, kirimkan juga (server tetap enforce)
+          d.region    = SESSION_REGION_ID > 0 ? SESSION_REGION_ID : ($('#f_region').val() || '');
           d.serpo     = $('#f_serpo').val()  || '';
           d.segmen    = $('#f_segmen').val() || '';
           d.date_from = $('#f_from').val()   || '';
@@ -197,7 +269,7 @@
         { data:'segmen_nama',   searchable:false,     defaultContent:'-' },
         { data:'status',        name:'ar.status',     defaultContent:'-' },
 
-        // kolom foto terpisah
+        // kolom foto
         { data:'before_photos', orderable:false, searchable:false, defaultContent:'-' },
         { data:'after_photos',  orderable:false, searchable:false, defaultContent:'-' },
 
@@ -210,12 +282,88 @@
 
     // Apply / Reset
     $('#btnApply').on('click', function(){ table.ajax.reload(null, false); });
+
     $('#btnReset').on('click', function(){
-      $('#f_region').val('');
+      // kalau region forced, jangan direset
+      if (SESSION_REGION_ID > 0) {
+        $('#f_region').val(String(SESSION_REGION_ID));
+      } else {
+        $('#f_region').val('');
+      }
       fillOptions($('#f_serpo'),  null);
       fillOptions($('#f_segmen'), null);
       $('#f_from,#f_to,#f_name').val('');
       table.ajax.reload(null, false);
+    });
+
+    // Preview Modal
+    $(document).on('click', '#table-results img.thumb-img', function () {
+      const $imgClicked = $(this);
+      const $cell       = $imgClicked.closest('td');
+      const $row        = $imgClicked.closest('tr');
+
+      const badge = ($imgClicked.siblings('.photo-badge').text() || '').trim().toUpperCase();
+      const groupLabel = (badge === 'B') ? 'Before Photos' : (badge === 'A' ? 'After Photos' : 'Photos');
+
+      const $imgs = $cell.find('img.thumb-img');
+      if (!$imgs.length) return;
+
+      let startIndex = 0;
+      const indicators = [];
+      const slides     = [];
+
+      $imgs.each(function(i){
+        const $im  = $(this);
+        const full = $im.attr('data-full') || $im.attr('src');
+        const alt  = $im.attr('alt') || `${groupLabel} ${i+1}`;
+        if (this === $imgClicked[0]) startIndex = i;
+        indicators.push(`<li data-target="#photoCarousel" data-slide-to="${i}" class="${i===0?'active':''}"></li>`);
+        slides.push(
+          `<div class="carousel-item ${i===0?'active':''}">
+            <img src="${full}" alt="${alt}">
+          </div>`
+        );
+      });
+
+      try { $('#photoCarousel').carousel('dispose'); } catch(e) {}
+
+      $('#photoCarousel .carousel-indicators').html(indicators.join(''));
+      $('#photoCarousel .carousel-inner').html(slides.join(''));
+      $('#photoCarousel').carousel({ interval: false, keyboard: true, ride: false });
+
+      const many = $imgs.length > 1;
+      $('#photoCarousel .carousel-control-prev, #photoCarousel .carousel-control-next').toggle(many);
+      $('#photoCarousel .carousel-indicators').toggle(many);
+
+      const user    = $row.find('td').eq(4).text().trim();
+      const act     = $row.find('td').eq(5).text().trim();
+      const created = $row.find('td').eq(14).text().trim();
+      $('#photoModalTitle').text(groupLabel);
+      $('#photoCaption').text([user||'-', act||'-', created||'-'].join(' • '));
+
+      $('#photoModal').modal('show');
+      $('#photoModal').one('shown.bs.modal', function(){
+        $('#photoCarousel').carousel(startIndex);
+      });
+    });
+
+    // Swipe support
+    (function(){
+      const $carousel = $('#photoCarousel');
+      let startX = 0, dx = 0;
+      $carousel.on('touchstart', function(e){ startX = e.originalEvent.touches[0].clientX; });
+      $carousel.on('touchmove',  function(e){ dx = e.originalEvent.touches[0].clientX - startX; });
+      $carousel.on('touchend',   function(){
+        if (Math.abs(dx) > 40){ $(this).carousel(dx < 0 ? 'next' : 'prev'); }
+        startX = 0; dx = 0;
+      });
+    })();
+
+    // Keyboard nav saat modal terbuka
+    $(document).on('keydown', function(e){
+      if (!$('#photoModal').hasClass('show')) return;
+      if (e.key === 'ArrowLeft')  $('#photoCarousel').carousel('prev');
+      if (e.key === 'ArrowRight') $('#photoCarousel').carousel('next');
     });
 
   });
