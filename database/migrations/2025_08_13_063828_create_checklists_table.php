@@ -21,7 +21,7 @@ return new class extends Migration
 
             $table->dateTime('started_at')->nullable();
             $table->dateTime('submitted_at')->nullable();
-            $table->string('status', 20)->default('pending'); // pending/completed
+            $table->string('status', 20)->default('pending'); // pending/review/completed
             $table->unsignedInteger('total_point')->default(0);
             $table->timestamps();
         });

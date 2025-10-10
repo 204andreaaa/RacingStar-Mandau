@@ -70,6 +70,7 @@
           {{-- shown --}}
           <th>User</th>
           <th>Activity</th>
+          <th>Sub Activity</th>
           <th>Region</th>
           <th>Serpo</th>
           <th>Segmen</th>
@@ -264,6 +265,19 @@
         // shown
         { data:'user_nama',     name:'u.nama',        defaultContent:'-' },
         { data:'activity_nama', name:'act.name',      defaultContent:'-' },
+        { 
+          data: 'sub_activity_nama', 
+          name: 'ar.sub_activities', 
+          defaultContent: '-', 
+          render: function(data, type, row) {
+              // Jika data adalah array atau JSON, gabungkan menjadi string
+              if (Array.isArray(data)) {
+                  return data.join(', ').replace(/"/g, '');  // Menggabungkan array menjadi string dengan koma dan menghapus tanda kutip
+              }
+              // Hapus tanda kutip jika data adalah string biasa
+              return (data || '').replace(/"/g, '') || '-';  // Menghilangkan kutip dan menampilkan '-' jika data kosong
+          }
+        },
         { data:'region_nama',   name:'r.nama_region', defaultContent:'-' },
         { data:'serpo_nama',    name:'sp.nama_serpo', defaultContent:'-' },
         { data:'segmen_nama',   searchable:false,     defaultContent:'-' },

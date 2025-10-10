@@ -11,6 +11,7 @@
         <select id="f_status" class="form-control form-control-sm" style="min-width:130px">
           <option value="">Semua Status</option>
           <option value="pending">Pending</option>
+          <option value="review admin">Review Admin</option>
           <option value="completed">Completed</option>
         </select>
         <input type="date" id="f_from" class="form-control form-control-sm">

@@ -189,7 +189,7 @@
 
     const kind = (data && data.kind) || 'save'; // 'save' | 'finish'
     const title = kind === 'finish'
-      ? 'Berhasil disimpan & diselesaikan, Selamat Anda mendapatkan Star'
+      ? 'Berhasil disimpan & diselesaikan, Star akan didapatkan setelah direview admin'
       : 'Berhasil disimpan ayo lanjutkan untuk mendapatkan star';
 
     if (typeof Swal !== 'undefined') {

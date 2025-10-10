@@ -6,15 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class ActivityResult extends Model
 {
-    protected $fillable = [
-        'checklist_id',      // <— TAMBAHKAN INI
-        'user_id',
-        'activity_id',
-        'id_segmen',
-        'submitted_at',
-        'status',
-        'point_earned',
-        'note',
+    public $table = 'activity_results';
+    public $primaryKey = 'id';
+    public $guarded = [];
+
+    protected $casts = [
+        'sub_activities' => 'array', 
     ];
     
     public function activity()

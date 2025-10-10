@@ -48,7 +48,7 @@ Route::middleware('manual.auth')->group(function () {
     // Tambah item aktivitas
     Route::post('/teknisi/ceklis/{checklist}/item', [ActivityResultController::class,'store'])->name('checklists.item.store');
     // Selesai sesi (hitung total)
-    Route::post('/teknisi/ceklis/{checklist}/finish', [ChecklistController::class,'finish'])->name('checklists.finish');
+    // Route::post('/teknisi/ceklis/{checklist}/finish', [ChecklistController::class,'finish'])->name('checklists.finish');
 
     // API dropdown berantai (dipakai di form teknisi)
     Route::get('/api/serpo/by-region/{id_region}', [ChecklistController::class,'serpoByRegion'])->name('api.serpo.byRegion');
@@ -76,7 +76,7 @@ Route::middleware('manual.auth')->group(function () {
         Route::get('checklists/allresult', [AdminChecklistController::class, 'allresult'])->name('checklists.allresult');
         // Checklist admin (index/show/destroy)
         Route::resource('checklists', AdminChecklistController::class)->only(['index','show','destroy']);
-
+        Route::post('checklists/{checklist}/review', [AdminChecklistController::class, 'reviewChecklist'])->name('checklists.review');
 
         // Master data (kalau ini memang khusus admin)
         Route::resource('aktifitas',         ActivityController::class)->parameters(['aktifitas' => 'activity'])->names('aktifitas');

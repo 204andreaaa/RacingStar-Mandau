@@ -37,7 +37,8 @@ class ActivityController extends Controller
                             data-is_checked_segmen="'.($r->is_checked_segmen?1:0).'"
                             data-limit_period="'.e($r->limit_period ?? 'none').'"
                             data-limit_quota="'.(int)($r->limit_quota ?? 1).'"
-                            data-requires_photo="'.($r->requires_photo?1:0).'">Edit</button>
+                            data-requires_photo="'.($r->requires_photo?1:0).'"
+                            data-sub_activities=\''.e(json_encode($r->sub_activities ?? [])).'\' >Edit</button>
                         <button type="button" class="btn btn-sm btn-danger btn-delete"
                             data-id="'.$r->id.'">Hapus</button>
                     ';
@@ -53,6 +54,15 @@ class ActivityController extends Controller
 
     public function store(Request $r)
     {
+        $subs = $this->normalizeSubs($r->input('sub_activities', []));
+
+        $r->merge([
+            'is_active'         => $r->boolean('is_active') ? 1 : 0,
+            'is_checked_segmen' => $r->boolean('is_checked_segmen') ? 1 : 0,
+            'requires_photo'    => $r->boolean('requires_photo') ? 1 : 0,
+            'sub_activities'    => $subs,
+        ]);
+        
         $data = $r->validate([
             'team_id'      => ['required','integer','in:1,2'],
             'name'         => ['required','string','max:255'],
@@ -62,7 +72,9 @@ class ActivityController extends Controller
             'is_checked_segmen' => ['required'],
             'limit_period' => ['required','in:none,daily,weekly,monthly'],
             'limit_quota'  => ['required','integer','min:1'],
-            'requires_photo' => ['nullable','boolean'], // ⟵ TAMBAH
+            'requires_photo' => ['nullable','boolean'],
+            'sub_activities' => ['nullable','array'],
+            'sub_activities.*' => ['nullable','string'],
         ]);
 
         Activity::create($data);
@@ -71,6 +83,15 @@ class ActivityController extends Controller
 
     public function update(Request $r, Activity $activity) // param harus {activity}
     {
+        $subs = $this->normalizeSubs($r->input('sub_activities', []));
+
+        $r->merge([
+            'is_active'         => $r->boolean('is_active') ? 1 : 0,
+            'is_checked_segmen' => $r->boolean('is_checked_segmen') ? 1 : 0,
+            'requires_photo'    => $r->boolean('requires_photo') ? 1 : 0,
+            'sub_activities'    => $subs,
+        ]);
+        
         $data = $r->validate([
             'team_id'      => ['required','integer','in:1,2'],
             'name'         => ['required','string','max:255'],
@@ -80,7 +101,9 @@ class ActivityController extends Controller
             'is_checked_segmen' => ['required'],
             'limit_period' => ['required','in:none,daily,weekly,monthly'],
             'limit_quota'  => ['required','integer','min:1'],
-            'requires_photo' => ['nullable','boolean'], // ⟵ TAMBAH
+            'requires_photo' => ['nullable','boolean'],
+            'sub_activities'     => ['nullable','array'],
+            'sub_activities.*'   => ['nullable','string'],
         ]);
 
         $activity->update($data);
@@ -92,6 +115,28 @@ class ActivityController extends Controller
     {
         $activity->delete();
         return response()->json(['message' => 'Aktivitas dihapus']);
+    }
+    
+    private function normalizeSubs($in): array
+    {
+        // Jika string JSON / teks tempelan
+        if (is_string($in)) {
+            $trim = trim($in);
+            if ($trim === '') return [];
+            $dec = json_decode($trim, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($dec)) $in = $dec;
+            else {
+                // pecah baris & koma
+                $in = preg_split('/[\r\n,]+/', $trim);
+            }
+        }
+        if (!is_array($in)) $in = [];
+
+        // Bersihkan & unik (case-insensitive)
+        $in = array_map(function($v){ return is_scalar($v) ? trim((string)$v) : ''; }, $in);
+        $in = array_filter($in, fn($v) => $v !== '');
+        $in = array_values(array_intersect_key($in, array_unique(array_map('mb_strtolower', $in))));
+        return $in;
     }
 
     public function create(){ abort(404); }

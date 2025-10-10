@@ -6,24 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class Activity extends Model
 {
-    protected $fillable = [
-        'team_id',
-        'name',
-        'description',
-        'point',
-        'is_active',
-        'is_checked_segmen',
-        'limit_period', // ⟵ TAMBAH
-        'limit_quota',  // ⟵ TAMBAH
-        'requires_photo',
-    ];
+    public $table = 'activities';
+    public $primaryKey = 'id';
+    public $guarded = [];
 
     protected $casts = [
-        'team_id'      => 'integer',
-        'point'        => 'integer',
-        'is_active'    => 'boolean',
-        'is_checked_segmen'    => 'boolean',
-        'limit_quota'  => 'integer',
-        'requires_photo'     => 'boolean',
+        'is_active' => 'boolean',
+        'is_checked_segmen' => 'boolean',
+        'requires_photo' => 'boolean',
+        'sub_activities' => 'array',
     ];
 }

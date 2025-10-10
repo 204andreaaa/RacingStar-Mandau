@@ -4,6 +4,9 @@
 @php
   $u = session('auth_user');
   $isSuper = isset($u['email']) && $u['email'] === 'superadmin@mandau.id';
+
+  // Lock region jika tersedia di session (coba beberapa kemungkinan key)
+  $lockedRegionId = $u['region_id'] ?? $u['id_region'] ?? null;
 @endphp
 
 <div class="content-wrapper">
@@ -17,7 +20,9 @@
         {{-- Filter ringkas (Region → Serpo), auto-apply --}}
         <div class="d-flex gap-2">
           <select id="f_region" class="form-control form-control-sm" style="min-width:200px">
-            <option value="">Semua Region</option>
+            @if(!$lockedRegionId)
+              <option value="">Semua Region</option>
+            @endif
             @foreach(\DB::table('regions')->orderBy('nama_region')->get() as $rg)
               <option value="{{ $rg->id_region }}">{{ $rg->nama_region }}</option>
             @endforeach
@@ -94,6 +99,7 @@
 
 <script>
   const IS_SUPER = @json($isSuper);
+  const LOCK_REGION = @json($lockedRegionId); // jika ada, seluruh data dikunci hanya region ini
 </script>
 <script>
 $(function(){
@@ -138,7 +144,12 @@ $(function(){
 
     if (regionVal) {
       const txt = $('#f_region option:selected').text();
-      $wrap.append(`<span class="chip">Region: ${txt} <span class="x" data-k="region">&times;</span></span>`);
+      // Jika region terkunci, jangan tampilkan tombol x
+      if (LOCK_REGION) {
+        $wrap.append(`<span class="chip">Region: ${txt}</span>`);
+      } else {
+        $wrap.append(`<span class="chip">Region: ${txt} <span class="x" data-k="region">&times;</span></span>`);
+      }
     }
     if (serpoVal) {
       const txt = $('#f_serpo option:selected').text();
@@ -152,13 +163,40 @@ $(function(){
 
   $(document).on('click', '.chip .x', function(){
     const k = $(this).data('k');
-    if (k === 'region') { $('#f_region').val(''); fillOptions($('#f_serpo'), null); }
+    if (k === 'region') {
+      if (LOCK_REGION) return; // tidak bisa hapus region terkunci
+      $('#f_region').val('');
+      fillOptions($('#f_serpo'), null);
+    }
     if (k === 'serpo')  { $('#f_serpo').val(''); }
     refreshChips();
     reloadTableDebounced();
   });
 
   $('#btnClearAll').on('click', function(){
+    // Jika terkunci, hanya bersihkan serpo; region tetap.
+    if (LOCK_REGION) {
+      $('#f_serpo').val('');
+      refreshChips();
+      return reloadTableDebounced();
+    }
+    // Tidak terkunci → bersihkan semua
+    $('#f_region').val('');
+    fillOptions($('#f_serpo'), null);
+    refreshChips();
+    reloadTableDebounced();
+  });
+
+  $('#btnReset').on('click', function(){
+    // Reset mengikuti aturan lock
+    if (LOCK_REGION) {
+      $('#f_region').val(String(LOCK_REGION));
+      // muat ulang serpo utk region terkunci
+      $.get("{{ route('admin.serpo.byRegion', ['id_region' => 'IDR']) }}".replace('IDR', LOCK_REGION))
+        .done(res => { fillOptions($('#f_serpo'), (res?.data ?? res)); })
+        .always(() => { $('#f_serpo').val(''); refreshChips(); reloadTableDebounced(); });
+      return;
+    }
     $('#f_region').val('');
     fillOptions($('#f_serpo'), null);
     refreshChips();
@@ -167,6 +205,7 @@ $(function(){
 
   // ================= Dependent Serpo + Auto-apply =================
   $('#f_region').on('change', function(){
+    if (LOCK_REGION) return; // dikunci, abaikan perubahan manual
     const id = $(this).val();
     fillOptions($('#f_serpo'), null);
 
@@ -182,12 +221,19 @@ $(function(){
     reloadTableDebounced();
   });
 
-  $('#btnReset').on('click', function(){
-    $('#f_region').val('');
-    fillOptions($('#f_serpo'), null);
-    refreshChips();
-    reloadTableDebounced();
-  });
+  // Jika region terkunci dari session → set nilai, kunci dropdown, dan preload serpo
+  function applyRegionLockIfAny(){
+    if (!LOCK_REGION) return;
+
+    // Set value region, disable, dan sembunyikan opsi "Semua Region" bila ada
+    $('#f_region').val(String(LOCK_REGION)).prop('disabled', true);
+    $('#f_region option[value=""]').remove();
+
+    // Muat serpo untuk region terkunci
+    $.get("{{ route('admin.serpo.byRegion', ['id_region' => 'IDR']) }}".replace('IDR', LOCK_REGION))
+      .done(res => { fillOptions($('#f_serpo'), (res?.data ?? res)); })
+      .always(() => { refreshChips(); });
+  }
 
   // ================= DataTables =================
   const table = $('#table-checklists').DataTable({
@@ -197,7 +243,8 @@ $(function(){
     ajax: {
       url: ROUTES.index,
       data: d => {
-        d.region = $('#f_region').val() || '';
+        // Pastikan region terkirim sesuai lock (jika ada)
+        d.region = LOCK_REGION ? String(LOCK_REGION) : ($('#f_region').val() || '');
         d.serpo  = $('#f_serpo').val()  || '';
       }
     },
@@ -221,6 +268,7 @@ $(function(){
       if (IS_SUPER && $('#btnDelAll').length === 0) {
         $len.append('<button id="btnDelAll" class="btn btn-sm btn-danger"><i class="fas fa-trash-alt me-1"></i> Hapus Semua (sesuai filter)</button>');
       }
+      applyRegionLockIfAny();
       refreshChips();
     }
   });
@@ -228,7 +276,7 @@ $(function(){
   // ================= Export (ikut filter + search global) =================
   $(document).on('click', '#btnExport', function(){
     const params = new URLSearchParams({
-      region: $('#f_region').val() || '',
+      region: LOCK_REGION ? String(LOCK_REGION) : ($('#f_region').val() || ''),
       serpo : $('#f_serpo').val()  || '',
       search: $('#table-checklists').DataTable().search() || ''
     });
@@ -279,7 +327,7 @@ $(function(){
 
       const payload = {
         _method: 'DELETE',
-        region: $('#f_region').val() || '',
+        region: LOCK_REGION ? String(LOCK_REGION) : ($('#f_region').val() || ''),
         serpo : $('#f_serpo').val()  || '',
         search: $('#table-checklists').DataTable().search() || ''
       };

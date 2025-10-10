@@ -17,7 +17,7 @@
 
 <div class="content-wrapper">
   <section class="content-header mb-3">
-    <h1 class="mb-1">Data Activity</h1>
+    <h1 class="mb-1">Data Aktifitas</h1>
     <div class="text-muted">
       Team: {{ $checklist->team ?? '—' }} • User ID: {{ $checklist->user_id ?? '—' }}
     </div>
@@ -41,10 +41,8 @@
         @php
           $already = isset($items) ? $items->firstWhere('activity_id', $a->id) : null;
           $isDone  = $already && $already->status === 'done';
-
-          // kebutuhan foto
+          
           $needPhoto = (bool) ($a->requires_photo ?? false);
-
           $period = $a->limit_period ?? 'none';
           $u = $usage[$a->id] ?? [
             'used'=>0,
@@ -58,19 +56,19 @@
           $label   = $u['label'] ?? 'Tidak dibatasi';
 
           $shouldDisable = !$isDone && $blocked;
-
-          // baseline untuk guard
           $baselineNote   = trim($already->note ?? '');
           $baselineSegmen = old('id_segmen.'.$a->id, $already->id_segmen ?? '');
 
           // jumlah foto existing utk validasi
           $existingBeforeCount = $already ? ($already->beforePhotos->count() ?? 0) : 0;
           $existingAfterCount  = $already ? ($already->afterPhotos->count() ?? 0)  : 0;
+
+          // Mengambil sub_activities yang terkait dengan aktivitas
+          $subActivities = $a->sub_activities ?? [];
         @endphp
 
         <div class="col-12">
-          <div
-            class="card activity-card shadow-sm {{ $isDone ? 'border-success' : '' }}"
+          <div class="card activity-card shadow-sm {{ $isDone ? 'border-success' : '' }}"
             data-activity-id="{{ $a->id }}"
             data-need-photo="{{ $needPhoto ? 1 : 0 }}"
             data-needs-segmen="{{ $a->is_checked_segmen ? 1 : 0 }}"
@@ -204,6 +202,20 @@
                       </div>
                     @endif
 
+                    @if(!empty($subActivities))
+                      <div class="mb-3">
+                        <label class="form-label">Sub-Aktivitas</label>
+                        <div>
+                          @foreach($subActivities as $sub)
+                            <div class="form-check">
+                              <input type="radio" class="form-check-input" name="sub_activities[{{ $a->id }}]" value="{{ $sub }}" id="sub_{{ $a->id }}_{{ $loop->index }}">
+                              <label class="form-check-label" for="sub_{{ $a->id }}_{{ $loop->index }}">{{ $sub }}</label>
+                            </div>
+                          @endforeach
+                        </div>
+                      </div>
+                    @endif
+
                     {{-- Catatan & Segmen tetap --}}
                     <div class="col-12">
                       <label class="form-label fw-semibold">Catatan/Lokasi</label>
@@ -246,9 +258,9 @@
 
     <div class="mt-4 d-flex">
       <a href="#">&nbsp;&nbsp;&nbsp;</a>
-      <button class="btn btn-primary px-4 me-10" name="finish" value="0" id="btnSave">
+      {{-- <button class="btn btn-primary px-4 me-10" name="finish" value="0" id="btnSave">
         💾 Simpan
-      </button>
+      </button> --}}
       <a href="#">&nbsp;&nbsp;&nbsp;</a>
       <button class="btn btn-success px-4" name="finish" value="1" id="btnFinish">
         ✅ Simpan &amp; Selesaikan
@@ -429,6 +441,81 @@ document.addEventListener('DOMContentLoaded', function(){
       .fail(() => alert('Gagal memuat data Segmen (preload).'));
   }
 
+  // ============ SINGLE-DONE LOCK: hanya boleh 1 aktivitas Done ============
+  (function(){
+    const toggles = Array.from(document.querySelectorAll('.toggle-done'));
+
+    // catat disabled awal dari server (quota penuh, dsb)
+    toggles.forEach(cb => { if (cb.disabled) cb.dataset.hard = '1'; });
+
+    function fieldsetOf(cb){
+      const card = cb.closest('.activity-card');
+      return card ? card.querySelector('.activity-fields') : null;
+    }
+    function setFieldsetEnabled(fs, on){
+      if (!fs) return;
+      if (on) {
+        fs.removeAttribute('disabled');
+        fs.querySelectorAll('input,textarea,select,button').forEach(el => el.removeAttribute('disabled'));
+      } else {
+        fs.setAttribute('disabled','disabled');
+        fs.querySelectorAll('input,textarea,select,button').forEach(el => el.setAttribute('disabled','disabled'));
+      }
+    }
+    function setFieldsetByCheckbox(cb){
+      const fs = fieldsetOf(cb);
+      setFieldsetEnabled(fs, cb.checked && !cb.disabled);
+    }
+
+    function enforceSingleDone(changedCb=null){
+      const checked = toggles.find(t => t.checked);
+
+      if (checked) {
+        // kunci semua yang lain
+        toggles.forEach(t => {
+          const isHard = t.dataset.hard === '1';
+          if (t !== checked) {
+            if (!isHard) t.disabled = true;
+            setFieldsetEnabled(fieldsetOf(t), false);
+          } else {
+            if (!isHard) t.disabled = false;
+            setFieldsetEnabled(fieldsetOf(t), true);
+          }
+        });
+
+        // jika user coba centang yang kedua, batalkan & kasih info
+        if (changedCb && changedCb !== checked && changedCb.checked) {
+          changedCb.checked = false;
+          if (window.Swal) {
+            Swal.fire({
+              icon: 'info',
+              title: 'Hanya boleh 1 aktivitas',
+              text: 'Batalkan centang aktivitas yang lain dulu untuk memilih yang berbeda.'
+            });
+          } else {
+            alert('Hanya boleh 1 aktivitas. Batalkan centang yang lain dulu.');
+          }
+        }
+      } else {
+        // tidak ada yang checked → kembalikan ke kondisi normal per checkbox
+        toggles.forEach(t => {
+          if (t.dataset.hard !== '1') t.disabled = false;
+          setFieldsetByCheckbox(t); // aktif/non-aktif sesuai statusnya
+        });
+      }
+    }
+
+    toggles.forEach(cb => {
+      cb.addEventListener('change', function(){
+        enforceSingleDone(this);
+      });
+    });
+
+    // kondisi awal (kalau ada yang sudah Done dari server)
+    enforceSingleDone();
+  })();
+  // ===================== /SINGLE-DONE LOCK =====================
+
   // ====== TANDAI AKSI & LOADING sebelum submit (agar popup bisa muncul di halaman tujuan) ======
   const form = document.getElementById('activityForm');
   const btnSave   = document.getElementById('btnSave');
@@ -485,7 +572,6 @@ document.addEventListener('DOMContentLoaded', function(){
         const totalAfter  = existingAfter  + pickedAfter;
 
         if (totalBefore < 1 || totalAfter < 1) {
-          // fokus ke uploader yang kurang
           const target = (totalBefore < 1 ? upBefore : upAfter) || card;
           target && target.scrollIntoView && target.scrollIntoView({behavior:'smooth', block:'center'});
           Swal && Swal.fire({icon:'warning', title:'Foto belum lengkap', text:'Aktivitas bertanda Done wajib memiliki minimal 1 foto Before dan 1 foto After.'});
@@ -498,7 +584,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
   if (btnSave) {
     btnSave.addEventListener('click', function(e){
-      // stop dulu; validasi → kalau lolos baru lanjutkan loading + mark
       if (!validateBeforeSubmit()) { e.preventDefault(); return; }
       markAction('save');
       showLoading();
@@ -571,6 +656,7 @@ document.addEventListener('DOMContentLoaded', function(){
     document.addEventListener('change', setButtonsState, true);
 
     // intercept submit: selain "ada perubahan", juga validasi wajib isi saat Done
+    const form = document.getElementById('activityForm');
     form.addEventListener('submit', function(e){
       if (!hasAnyChange()) {
         e.preventDefault();

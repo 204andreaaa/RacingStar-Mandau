@@ -1,6 +1,16 @@
 @extends('layouts.appBestRising')
 
 @section('main')
+<style>
+  #subs_chips .chip{
+    display:inline-flex;align-items:center;gap:.5rem;
+    padding:.25rem .6rem;border-radius:999px;background:#f3f4f6;border:1px solid #e5e7eb;
+    margin:.15rem .3rem .15rem 0;font-size:.875rem;max-width:100%;
+  }
+  #subs_chips .chip .txt{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #subs_chips .chip .x{border:none;background:transparent;font-weight:bold;line-height:1;cursor:pointer;}
+</style>
+
 <div class="content-wrapper">
   <section class="content-header"><h1>Activity</h1></section>
 
@@ -135,6 +145,24 @@
           <small class="text-muted">Jika dicentang, user harus upload foto before & after saat menandai <em>Done</em>.</small>
         </div>
 
+        <hr class="my-2">
+
+        <div class="form-group mb-2">
+          <label class="d-flex align-items-center justify-content-between">
+            <span>Sub-Aktivitas <span class="text-muted">(opsional)</span></span>
+          </label>
+
+          <div class="input-group mb-2">
+            <input type="text" id="sub_input" class="form-control" placeholder="Tulis sub-aktivitas lalu Enter / Tambah">
+            <button type="button" id="btnAddSub" class="btn btn-outline-primary">Tambah</button>
+          </div>
+
+          <!-- daftar chip (sub_activities yang sudah ada) -->
+          <div id="subs_chips" class="d-flex flex-wrap gap-2"></div>
+
+          <!-- hidden inputs agar terkirim sebagai array -->
+          <div id="subs_hidden"></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-light" data-dismiss="modal">Batal</button>
@@ -167,6 +195,7 @@ $(function(){
     if ($form.length && $form[0]) $form[0].reset();
     // pastikan checkbox kembali default (off)
     $('#requires_photo').prop('checked', false);
+    SUBS = []; renderSubs();
   });
   
   $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
@@ -197,6 +226,59 @@ $(function(){
 
   $('#f_team').on('change', function(){ table.ajax.reload(); });
 
+    let SUBS = [];
+
+  const $subInput = $('#sub_input');
+  const $chips = $('#subs_chips');
+  const $hidden = $('#subs_hidden');
+
+  // Fungsi untuk merender chips dan hidden inputs
+  function renderSubs() {
+    $chips.empty();
+    SUBS.forEach((t, i) => {
+      const esc = $('<div>').text(t).html();  // Escape agar aman di HTML
+      $chips.append(`
+        <span class="chip" title="${esc}">
+          <span class="txt">${esc}</span>
+          <button type="button" class="x" data-i="${i}" aria-label="Hapus">&times;</button>
+        </span>
+      `);
+    });
+    // Menambahkan hidden inputs untuk dikirim lewat form
+    $hidden.empty();
+    SUBS.forEach(v => $hidden.append(`<input type="hidden" name="sub_activities[]" value="${$('<div>').text(v).html()}">`));
+  }
+
+  // Fungsi untuk menambahkan sub-aktivitas satu per satu
+  function addOne(raw) {
+    const v = (raw || '').trim();
+    if (!v) return;
+    if (SUBS.map(x => x.toLowerCase()).includes(v.toLowerCase())) return; // Cek jika sudah ada
+    SUBS.push(v);
+    renderSubs();
+  }
+
+  // Event untuk tombol Tambah sub-aktivitas
+  $('#btnAddSub').on('click', function() {
+    addOne($subInput.val());
+    $subInput.val('').focus();
+  });
+
+  // Event untuk tekan Enter di input
+  $subInput.on('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      $('#btnAddSub').trigger('click');
+    }
+  });
+
+  // Event untuk hapus sub-aktivitas dari chips
+  $chips.on('click', '.x', function() {
+    const i = Number($(this).data('i'));
+    SUBS.splice(i, 1);  // Hapus item dari array
+    renderSubs();  // Render ulang chips
+  });
+
   // Add
   $('#btnAdd').on('click', function(){
     $('#modalTitle').text('Tambah Activity');
@@ -205,8 +287,13 @@ $(function(){
     $('#limit_period').val('none');
     $('#limit_quota').val(1);
     $('#requires_photo').prop('checked', false); // default off
-    const tf = $('#f_team').val(); if(tf) $('#team_id').val(tf);
+    
+    const tf = $('#f_team').val(); 
+    if (tf) $('#team_id').val(tf).trigger('change');
+    
     $('#modalAktifitas').modal('show');
+
+    SUBS = []; renderSubs();
   });
 
   // Edit
@@ -224,30 +311,65 @@ $(function(){
     $('#limit_quota').val($(this).data('limit_quota') || 1);
     $('#requires_photo').prop('checked', String($(this).data('requires_photo')) === '1'); // ⟵ BARU
     $('#modalAktifitas').modal('show');
+
+    // Set sub_activities yang sudah ada
+    let arr = $(this).data('sub_activities');
+    if (typeof arr === 'string' && arr.trim() !== '') {
+      try {
+        arr = JSON.parse(arr);  // Parse jika string JSON
+      } catch (e) {
+        arr = [];
+      }
+    }
+    if (!Array.isArray(arr)) arr = [];
+    SUBS = arr.filter(Boolean).map(String);
+    renderSubs();
   });
 
   // Submit create/update
   $('#formAktifitas').on('submit', function(e){
     e.preventDefault();
-    const id  = $('#id_row').val();
-    const body = $(this).serialize();
-    const url  = id ? urlUpdate(id) : ROUTES.store;
+    
+    const id = $('#id_row').val();
+    const body = $(this).serializeArray(); // Serialize as array instead of query string
+    const url = id ? urlUpdate(id) : ROUTES.store;
     const type = 'POST';
-    const data = id ? (body + '&_method=PUT') : body;
 
-    $('#btnSave').prop('disabled',true).text('Menyimpan...');
-    $.ajax({ url, type, data })
-      .done(res => {
+    // Pastikan sub_activities[] dikirim bersama data lainnya
+    const subActivities = [];
+    $('#subs_chips .chip .txt').each(function() {
+      subActivities.push($(this).text());  // Ambil sub-aktivitas yang ada di chips
+    });
+
+    // Tambahkan sub_activities[] ke data
+    subActivities.forEach(function(sub) {
+      body.push({ name: 'sub_activities[]', value: sub });
+    });
+
+    const data = id ? [...body, { name: '_method', value: 'PUT' }] : body;
+
+    $('#btnSave').prop('disabled', true).text('Menyimpan...');
+
+    $.ajax({
+      url: url,
+      type: type,
+      data: data,
+      success: function(res) {
         $('#modalAktifitas').modal('hide');
-        table.ajax.reload(null,false);
-        Swal.fire({icon:'success', title:'OK', text:res.message});
-      })
-      .fail(xhr => {
+        table.ajax.reload(null, false);
+        Swal.fire({ icon: 'success', title: 'OK', text: res.message });
+      },
+      error: function(xhr) {
         let msg = xhr.responseJSON?.message || 'Terjadi kesalahan';
-        if(xhr.responseJSON?.errors) msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
-        Swal.fire({icon:'error', title:'Gagal', text:msg});
-      })
-      .always(() => $('#btnSave').prop('disabled',false).text('Simpan'));
+        if (xhr.responseJSON?.errors) {
+          msg += "\n" + Object.values(xhr.responseJSON.errors).flat().join('\n');
+        }
+        Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
+      },
+      complete: function() {
+        $('#btnSave').prop('disabled', false).text('Simpan');
+      }
+    });
   });
 
   // ====== DELETE FIX ======

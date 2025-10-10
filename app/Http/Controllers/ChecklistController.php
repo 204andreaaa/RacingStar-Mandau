@@ -101,7 +101,7 @@ class ChecklistController extends Controller
 
         $usage = $this->activityResultController->usageForActivities($checklist->user_id, $activities);
 
-        return view('bestRising.user.ceklis.index', compact('checklist','activities','items','usage'));
+        return view('bestRising.user.ceklis.index', compact('checklist', 'activities', 'items', 'usage'));
     }
 
     public function show_result(Checklist $checklist)
@@ -126,16 +126,16 @@ class ChecklistController extends Controller
     }
 
   // Selesai sesi: hitung total
-    public function finish(Request $req, Checklist $checklist)
-    {
-        $total = ActivityResult::where('checklist_id', $checklist->id)->sum('point_earned');
-        $checklist->update([
-        'status'       => 'completed',
-        'submitted_at' => now(),
-        'total_point'  => $total,
-        ]);
-        return back()->with('success', 'Checklist selesai. Total poin: '.$total);
-    }
+    // public function finish(Request $req, Checklist $checklist)
+    // {
+    //     $total = ActivityResult::where('checklist_id', $checklist->id)->sum('point_earned');
+    //     $checklist->update([
+    //     'status'       => 'completed',
+    //     'submitted_at' => now(),
+    //     'total_point'  => $total,
+    //     ]);
+    //     return back()->with('success', 'Checklist selesai. Total poin: '.$total);
+    // }
 
     public function tableCeklis(Request $request) 
     {

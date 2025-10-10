@@ -151,10 +151,6 @@ class ActivityResultController extends Controller
     public function store(Request $req, Checklist $checklist)
     {
         $activityIds = array_map('intval', array_keys($req->input('status', [])));
-        // if (empty($activityIds)) {
-        //     return back()->with('success', 'Tidak ada perubahan.');
-        // }
-
         $errors = [];
 
         DB::beginTransaction();
@@ -208,6 +204,14 @@ class ActivityResultController extends Controller
                 $record->note         = $req->input("note.$aid");
                 $record->id_segmen    = $segmenId !== null && $segmenId !== '' ? (int)$segmenId : null;
                 $record->submitted_at = now();
+                $record->is_approval  = false;
+
+                // Menyimpan sub_activities jika ada
+                $subActivities = $req->input("sub_activities.$aid", []); // Ambil sub_activities
+                if (!empty($subActivities)) {
+                    $record->sub_activities = $subActivities; // Simpan sub_activities
+                }
+                
                 $record->save(); // <-- penting, supaya $record->id ada
 
                 // === VALIDASI file: HANYA jika status=done DAN aktivitas MEMERLUKAN foto ===
@@ -313,7 +317,7 @@ class ActivityResultController extends Controller
             if ($req->boolean('finish')) {
                 $total = ActivityResult::where('checklist_id',$checklist->id)->sum('point_earned');
                 $checklist->update([
-                    'status'       => 'completed',
+                    'status'       => 'review admin',
                     'submitted_at' => now(),
                     'total_point'  => $total,
                 ]);

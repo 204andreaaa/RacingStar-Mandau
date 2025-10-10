@@ -15,7 +15,7 @@
   $namaSegmen  = $checklist->segmen->nama_segmen ?? '-';
   $status      = $checklist->status ?? '-';
   $badge       = $status === 'completed' ? 'badge-success'
-                : ($status === 'pending' ? 'badge-warning' : 'badge-secondary');
+                : ($status === 'review admin' || $status === 'pending' ? 'badge-warning' : 'badge-secondary');
   $totalPoint  = (int) ($checklist->total_point ?? 0);
 
   // NORMALIZER URL GAMBAR → selalu /storage/<path> (root-relative)
@@ -55,25 +55,33 @@
           <div>Total Star  : <strong>{{ $totalPoint }}</strong></div>
         </div>
       </div>
+      <div class="mt-1 mt-md-0 w-100 w-md-auto text-md-end">
+        <a href="{{ route('checklists.table-ceklis') }}" class="btn btn-primary w-100 w-md-auto">← Kembali</a>
+      </div>
     </div>
 
-    <div class="mt-1 mt-md-0 w-100 w-md-auto text-md-end">
-      <a href="{{ route('checklists.table-ceklis') }}" class="btn btn-primary w-100 w-md-auto">← Kembali</a>
-    </div>
   </section>
 
   {{-- ITEMS --}}
   <div class="card">
     <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
       <h3 class="mb-0">Item Aktivitas</h3>
-      <div class="text-muted small">
+      {{-- <div class="text-muted small">
         Total item: <strong>{{ $items->count() }}</strong>
         <span class="mx-1">•</span>
         Total Star (hitung ulang): <strong>{{ $items->sum('point_earned') }}</strong>
-      </div>
+      </div> --}}
     </div>
 
     <div class="card-body">
+      @if ($status === 'rejected')
+        <div class="alert alert-danger" role="alert">
+          <h4 class="alert-heading">Alasan Penolakan!</h4>
+          <hr>
+          <p class="mb-0">{{ $items[0]->alasan_tolak ?? 'Tidak ada alasan penolakan.' }}</p>
+        </div>
+      @endif
+
       {{-- DESKTOP/TABLET --}}
       <div class="d-none d-md-block">
         <div class="table-responsive">
@@ -82,8 +90,8 @@
               <tr>
                 <th style="width:160px;">Waktu</th>
                 <th>Aktivitas</th>
-                <th style="width:110px;">Status</th>
-                <th style="width:90px;" class="text-end">Star</th>
+                {{-- <th style="width:110px;">Status</th> --}}
+                {{-- <th style="width:90px;" class="text-end">Star</th> --}}
                 <th style="width:260px;">Before</th>
                 <th style="width:260px;">After</th>
                 <th>Catatan</th>
@@ -106,10 +114,11 @@
                   <td class="text-nowrap">{{ optional($it->submitted_at)->format('Y-m-d H:i:s') ?? '-' }}</td>
                   <td>
                     {{ $it->activity->name ?? '-' }}
+                    <br><small class="text-muted">Sub Aktivitas: {{ $it->sub_activities ?? '-' }}</small>
                     <br><small class="text-muted">Segmen: {{ $it->segmen->nama_segmen ?? '-' }}</small>
                   </td>
-                  <td><span class="badge {{ $bd }}">{{ ucfirst($st) }}</span></td>
-                  <td class="text-end">{{ (int)($it->point_earned ?? 0) }}</td>
+                  {{-- <td><span class="badge {{ $bd }}">{{ ucfirst($st) }}</span></td> --}}
+                  {{-- <td class="text-end">{{ (int)($it->point_earned ?? 0) }}</td> --}}
 
                   {{-- BEFORE --}}
                   <td>
@@ -146,18 +155,18 @@
                   <td class="note-pre">{{ $it->note ?? '-' }}</td>
                 </tr>
               @empty
-                <tr><td colspan="7" class="text-center text-muted">Belum ada item</td></tr>
+                <tr><td colspan="5" class="text-center text-muted">Belum ada item</td></tr>
               @endforelse
             </tbody>
-            @if($items->count())
+            {{-- @if($items->count())
             <tfoot>
               <tr>
-                <th colspan="3" class="text-end">Total</th>
+                <th colspan="2" class="text-end">Total</th>
                 <th class="text-end">{{ $items->sum('point_earned') }}</th>
                 <th colspan="3"></th>
               </tr>
             </tfoot>
-            @endif
+            @endif --}}
           </table>
         </div>
       </div>

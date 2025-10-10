@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\AllResultsExport;
 use App\Exports\ChecklistsExport;
-use App\Models\Checklist;
+use App\Models\{Checklist, ActivityResult};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -53,6 +53,7 @@ class AdminChecklistController extends Controller
                 ->select([
                     'ar.id','ar.checklist_id','ar.submitted_at',
                     'ar.status','ar.point_earned','ar.note','ar.created_at',
+                    DB::raw('REPLACE(REPLACE(ar.sub_activities, "&quot;", ""), \'"\', "") as sub_activity_nama'), 
                     DB::raw('COALESCE(u.nama, u.email) as user_nama'),
                     DB::raw('act.name as activity_nama'),
                     DB::raw('COALESCE(r.nama_region, "-") as region_nama'),
@@ -61,7 +62,8 @@ class AdminChecklistController extends Controller
                     DB::raw('sg.id_segmen as segmen_id'),
                     DB::raw('bfl.before_list'),
                     DB::raw('afl.after_list'),
-                ]);
+                ])
+                ->where('is_approval', true);
 
             // === ENFORCE REGION BY SESSION ===
             if (!is_null($sessionRegionId)) {
@@ -116,6 +118,7 @@ class AdminChecklistController extends Controller
                     });
                 })
                 ->filterColumn('activity_nama', fn($query,$k) => $query->where('act.name','like','%'.$k.'%'))
+                ->filterColumn('sub_activity_nama', fn($query,$k) => $query->where('ar.sub_activities','like','%'.$k.'%'))
                 ->filterColumn('region_nama', fn($query,$k) => $query->where('r.nama_region','like','%'.$k.'%'))
                 ->filterColumn('serpo_nama',  fn($query,$k) => $query->where('sp.nama_serpo','like','%'.$k.'%'))
                 ->editColumn('created_at', fn($r) => $r->created_at ? \Carbon\Carbon::parse($r->created_at)->format('Y-m-d H:i:s') : '-')
@@ -448,6 +451,56 @@ class AdminChecklistController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json(['success'=>false,'message'=>'Gagal menghapus massal: '.$e->getMessage()], 500);
+        }
+    }
+
+    public function reviewChecklist(Request $request, Checklist $checklist)
+    {
+        $action = $request->input('action'); // 'approve' | 'reject'
+        $alasan = trim($request->input('alasan_tolak', ''));
+
+        try {
+            DB::transaction(function () use ($action, $alasan, $checklist) {
+                if ($action === 'approve') {
+                    ActivityResult::where('checklist_id', $checklist->id)->update([
+                        'is_approval'  => true,
+                        'alasan_tolak' => null,
+                    ]);
+
+                    $approved = ActivityResult::where('checklist_id', $checklist->id)->where('is_approval', true)->sum('point_earned');
+
+                    $checklist->update([
+                        'approved_point_total' => $approved,
+                        'total_point'          => $approved, // kalau tabel lama pakai ini
+                        'status'               => 'completed', // opsional
+                    ]);
+                } elseif ($action === 'reject') {
+                    if ($alasan === '') {
+                        throw new \RuntimeException('Alasan penolakan wajib diisi.');
+                    }
+
+                    ActivityResult::where('checklist_id', $checklist->id)->update([
+                        'is_approval'  => false,
+                        'alasan_tolak' => $alasan,
+                    ]);
+
+                    $checklist->update([
+                        'approved_point_total' => 0,
+                        'total_point'          => 0,
+                        'status'               => 'rejected', // opsional
+                    ]);
+                } else {
+                    throw new \RuntimeException('Kategori tidak dikenali.');
+                }
+            });
+
+            return response()->json([
+                'ok'      => true,
+                'message' => $action === 'approve' ? 'Checklist disetujui.' : 'Checklist ditolak.',
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
         }
     }
 }
