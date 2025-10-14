@@ -112,17 +112,21 @@ class ChecklistController extends Controller
             ->leftJoin('serpos  as s', 's.id_serpo',   '=', 'c.id_serpo')
             ->leftJoin('segmens as g', 'g.id_segmen',  '=', 'c.id_segmen')
             ->where('c.id', $checklist->id)
-            ->select([
-                'c.*','u.nama as user_nama','r.nama_region','s.nama_serpo','g.nama_segmen'
-            ])->first();
+            ->select(['c.*','u.nama as user_nama','r.nama_region','s.nama_serpo','g.nama_segmen'])
+            ->first();
 
-        // items (aktivitas yang diceklis)
-        $items = ActivityResult::with('activity')
+        // ⬇️ penting: ikutkan yang soft-deleted
+        $items = ActivityResult::withTrashed()
+            ->with('activity')
             ->where('checklist_id', $checklist->id)
             ->orderByDesc('submitted_at')
             ->get();
 
-        return view('bestRising.user.ceklis.show', compact('checklist','meta','items'));
+        // Ambil alasan dari checklist dulu, fallback ke item pertama (kalau disimpan di item)
+        $rejectReason = $checklist->alasan_tolak ?? optional($items->first())->alasan_tolak;
+
+        return view('bestRising.user.ceklis.show',
+            compact('checklist','meta','items','rejectReason'));
     }
 
   // Selesai sesi: hitung total

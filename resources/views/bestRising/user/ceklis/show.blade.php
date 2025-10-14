@@ -78,7 +78,10 @@
         <div class="alert alert-danger" role="alert">
           <h4 class="alert-heading">Alasan Penolakan!</h4>
           <hr>
-          <p class="mb-0">{{ $items[0]->alasan_tolak ?? 'Tidak ada alasan penolakan.' }}</p>
+          @php
+            $rejectReason = $rejectReason ?? ($checklist->alasan_tolak ?? optional($items->first())->alasan_tolak);
+          @endphp
+          <p class="mb-0">{{ $rejectReason ?: 'Tidak ada alasan penolakan.' }}</p>
         </div>
       @endif
 
