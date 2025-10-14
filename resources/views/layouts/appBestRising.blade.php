@@ -203,6 +203,7 @@
 </footer>
 
 
+
 <script src="{{asset('adminLTE/plugins/bootstrap/js/bootstrap.bundle.min.js')}}"></script>
 <script src="{{asset('adminLTE/dist/js/adminlte.min.js')}}"></script>
 <script src="{{asset('adminLTE/plugins/datatables/jquery.dataTables.min.js')}}"></script>

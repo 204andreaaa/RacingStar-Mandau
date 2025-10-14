@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
+use Carbon\Carbon;
 
 class AdminChecklistController extends Controller
 {
@@ -223,13 +224,26 @@ class AdminChecklistController extends Controller
                     $serpo  = $row->serpo->nama_serpo   ?? ($row->user->serpo->nama_serpo   ?? '-');
                     return "{$region} / {$serpo}";
                 })
-                ->addColumn('action', function($row){
-                    $btnShow = '<a class="btn btn-sm btn-outline-primary mr-1" href="'.route('admin.checklists.show', $row->id).'">Detail</a>';
-                    $btnDel  = '<button class="btn btn-sm btn-outline-danger btn-del" data-url="'.route('admin.checklists.destroy', $row->id).'">Hapus</button>';
-                    return $btnShow.' '.$btnDel;
+                ->addColumn('cb', function($row){
+                    // tampilkan checkbox hanya jika BELUM completed
+                    if ($row->status === 'completed' || $row->status === 'rejected') return '';
+                    return '<input type="checkbox" class="cb-approve" value="'.$row->id.'">';
                 })
-                ->rawColumns(['action'])
+                ->addColumn('action', function($row) {
+                    $btnShow = '<a class="btn btn-sm btn-outline-primary mr-1" href="' . route('admin.checklists.show', $row->id) . '">Detail</a>';
+                    
+                    // hanya tampilkan tombol hapus kalau status-nya bukan 'completed'
+                    $btnDel = '';
+                    if ($row->status !== 'completed') {
+                        $btnDel = '<button class="btn btn-sm btn-outline-danger btn-del" data-url="' . route('admin.checklists.destroy', $row->id) . '">Hapus</button>';
+                    }
+
+                    return $btnShow . ' ' . $btnDel;
+                })
+                ->rawColumns(['action','cb'])
                 ->make(true);
+
+            
         }
 
         return view('bestRising.admin.checklists.index');
@@ -237,7 +251,7 @@ class AdminChecklistController extends Controller
 
     public function show($id)
     {
-        $checklist = Checklist::with(['user','region','serpo','segmen','items'])->findOrFail($id);
+        $checklist = Checklist::with(['user','region','serpo','segmen','items','itemsTrashed'])->findOrFail($id);
         return view('bestRising.admin.checklists.show', compact('checklist'));
     }
 
@@ -456,40 +470,54 @@ class AdminChecklistController extends Controller
 
     public function reviewChecklist(Request $request, Checklist $checklist)
     {
-        $action = $request->input('action'); // 'approve' | 'reject'
+        $action = $request->input('action');
         $alasan = trim($request->input('alasan_tolak', ''));
 
         try {
             DB::transaction(function () use ($action, $alasan, $checklist) {
                 if ($action === 'approve') {
-                    ActivityResult::where('checklist_id', $checklist->id)->update([
-                        'is_approval'  => true,
-                        'alasan_tolak' => null,
-                    ]);
+                    ActivityResult::withTrashed()
+                        ->where('checklist_id', $checklist->id)
+                        ->update([
+                            'is_approval'  => true,
+                            'is_rejected'  => false,
+                            'alasan_tolak' => null,
+                            'deleted_at'   => null, // restore jika sebelumnya softdelete
+                        ]);
 
                     $approved = ActivityResult::where('checklist_id', $checklist->id)->where('is_approval', true)->sum('point_earned');
 
                     $checklist->update([
                         'approved_point_total' => $approved,
-                        'total_point'          => $approved, // kalau tabel lama pakai ini
-                        'status'               => 'completed', // opsional
+                        'total_point'          => $approved,
+                        'status'               => 'completed',
                     ]);
-                } elseif ($action === 'reject') {
+                }
+
+                elseif ($action === 'reject') {
                     if ($alasan === '') {
                         throw new \RuntimeException('Alasan penolakan wajib diisi.');
                     }
 
-                    ActivityResult::where('checklist_id', $checklist->id)->update([
-                        'is_approval'  => false,
-                        'alasan_tolak' => $alasan,
-                    ]);
+                    // tandai rejected + softdelete semua item checklist
+                    $results = ActivityResult::where('checklist_id', $checklist->id)->get();
+                    foreach ($results as $res) {
+                        $res->update([
+                            'is_approval'  => false,
+                            'alasan_tolak' => $alasan,
+                            'is_rejected'  => true,
+                        ]);
+                        $res->delete(); // soft delete otomatis
+                    }
 
                     $checklist->update([
                         'approved_point_total' => 0,
                         'total_point'          => 0,
-                        'status'               => 'rejected', // opsional
+                        'status'               => 'rejected',
                     ]);
-                } else {
+                }
+
+                else {
                     throw new \RuntimeException('Kategori tidak dikenali.');
                 }
             });
@@ -498,9 +526,70 @@ class AdminChecklistController extends Controller
                 'ok'      => true,
                 'message' => $action === 'approve' ? 'Checklist disetujui.' : 'Checklist ditolak.',
             ]);
+
         } catch (\Throwable $e) {
             report($e);
             return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
         }
+    }
+
+    public function items(\App\Models\Checklist $checklist)
+    {
+        // muat relasi item + activity + segmen + foto before/after jika ada
+        $checklist->load([
+            'items.activity:id,name',
+            'items.segmen:id_segmen,nama_segmen',
+            'items.beforePhotos',  // sesuaikan nama relasinya
+            'items.afterPhotos',   // sesuaikan nama relasinya
+        ]);
+
+        $toUrl = function ($p) { return $p ? (preg_match('#^https?://#',$p) ? $p : Storage::url(ltrim(preg_replace('#^(public|storage)/#','',$p),'/'))) : null; };
+
+        $rows = $checklist->items->map(function($it) use ($toUrl){
+            $beforeSet = collect($it->beforePhotos ?? [])->pluck('path')->filter()->values()->all();
+            $afterSet  = collect($it->afterPhotos  ?? [])->pluck('path')->filter()->values()->all();
+            if (empty($beforeSet) && !empty($it->before_photo)) $beforeSet = [$it->before_photo];
+            if (empty($afterSet)  && !empty($it->after_photo))  $afterSet  = [$it->after_photo];
+
+            return [
+                'submitted_at' => optional($it->submitted_at)->format('Y-m-d H:i:s') ?? '-',
+                'activity'     => $it->activity->name ?? '-',
+                'sub_activities'=> $it->sub_activities ?: '-',
+                'segmen'       => $it->segmen->nama_segmen ?? '-',
+                'before'       => array_values(array_map($toUrl, $beforeSet)),
+                'after'        => array_values(array_map($toUrl, $afterSet)),
+                'note'         => $it->note ?? '-',
+            ];
+        });
+
+        return response()->json(['data' => $rows]);
+    }
+
+    public function approveBulk(Request $request)
+    {
+        $data = $request->validate([
+            'ids'   => ['required','array','min:1'],
+            'ids.*' => ['integer','distinct'],
+        ]);
+
+        $ids = $data['ids'];
+
+        // Hanya approve yang belum completed
+        $count = \App\Models\Checklist::query()
+            ->whereIn('id', $ids)
+            ->where('status', '!=', 'completed')
+            ->update([
+                'status'       => 'completed',
+                'submitted_at' => Carbon::now(), // opsional: set waktu selesai saat approve
+            ]);
+        ActivityResult::whereIn('checklist_id', $ids)
+            ->update([
+                'is_approval'  => true,
+            ]);
+
+        return response()->json([
+            'message' => "Berhasil approve {$count} checklist.",
+            'approved'=> $count,
+        ]);
     }
 }

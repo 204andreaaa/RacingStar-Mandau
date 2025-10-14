@@ -3,15 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ActivityResult extends Model
 {
+    use SoftDeletes;
+
     public $table = 'activity_results';
     public $primaryKey = 'id';
     public $guarded = [];
 
     protected $casts = [
-        'sub_activities' => 'array', 
+        'sub_activities' => 'array',
+        'is_approval' => 'boolean',
+        'is_rejected' => 'boolean',
     ];
     
     public function activity()

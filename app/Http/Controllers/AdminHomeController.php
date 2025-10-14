@@ -9,14 +9,13 @@ use App\Models\Serpo;
 use App\Models\Segmen;
 use App\Models\Checklist;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 class AdminHomeController extends Controller
 {
     /**
-     * Tentukan anchor (tanggal rilis). 
-     * - Bisa kamu ambil dari config/env juga kalau mau:
-     *   $anchor = Carbon::parse(config('app.anchor_date', '2025-09-11'));
+     * Hitung periode kuartal berjalan berbasis anchor (tanggal rilis).
      */
     private function currentQuarterRangeFromAnchor(Carbon $anchor, ?Carbon $now = null): array
     {
@@ -38,7 +37,7 @@ class AdminHomeController extends Controller
         }
 
         // Label periode (contoh: "Sep–Nov 2025")
-        $fmt = fn (Carbon $d) => $d->translatedFormat('M Y'); // pakai locale id_ID di app biar "Sep" dst
+        $fmt = fn (Carbon $d) => $d->translatedFormat('M Y'); // butuh locale id_ID
         $shortMonth = fn (Carbon $d) => $d->translatedFormat('M');
         $label = $start->year === $end->year
             ? sprintf('%s–%s %d', $shortMonth($start), $shortMonth($end), $end->year)
@@ -47,51 +46,118 @@ class AdminHomeController extends Controller
         return [$start, $end, $label];
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        // ---- KPI counts ----
+        // ===== Determinasi Region Aktif =====
+        // 1) Utamakan region dari akun/session admin (mis. kolom id_region di tabel user)
+        $sessionUser   = auth()->user();
+        $sessionRegion = $sessionUser->id_region ?? (session('auth_user.id_region') ?? null);
+
+        // 2) Kalau tidak ada region di session/akun, izinkan pilih via filter ?region_id=...
+        $filterRegion    = $sessionRegion ? null : $request->query('region_id');
+        $activeRegionId  = $sessionRegion ?: ($filterRegion ?: null);
+
+        // Ambil list region untuk dropdown HANYA bila tidak ada region di session
+        $regionOptions = $sessionRegion ? collect() : Region::query()
+            ->orderBy('nama_region')
+            ->get(['id_region','nama_region']);
+
+        // Helper scope by region (dipakai berulang)
+        $applyRegionToSerpo = function ($q) use ($activeRegionId) {
+            if ($activeRegionId) { $q->where('id_region', $activeRegionId); }
+            return $q;
+        };
+        $applyRegionToSegmen = function ($q) use ($activeRegionId) {
+            if ($activeRegionId) {
+                $q->whereHas('serpo', function($qq) use ($activeRegionId){
+                    $qq->where('id_region', $activeRegionId);
+                });
+            }
+            return $q;
+        };
+        $applyRegionToUser = function ($q) use ($activeRegionId) {
+            if ($activeRegionId) { $q->where('id_region', $activeRegionId); }
+            return $q;
+        };
+
+        // ---- KPI counts (scoped) ----
         $counts = [
-            'users'   => (int) UserBestrising::query()->count(),
-            'regions' => (int) Region::query()->count(),
-            'serpos'  => (int) Serpo::query()->count(),
-            'segmens' => (int) Segmen::query()->count(),
+            'users'   => (int) UserBestrising::query()->tap($applyRegionToUser)->count(),
+            'regions' => (int) ($activeRegionId ? 1 : Region::query()->count()),
+            'serpos'  => (int) Serpo::query()->tap($applyRegionToSerpo)->count(),
+            'segmens' => (int) Segmen::query()->tap($applyRegionToSegmen)->count(),
+        ];
+
+        // ---- STATUS CHECKLIST (Approved/Pending/Rejected) ----
+        $statusCounts = Checklist::query()
+            ->when($activeRegionId, function($q) use ($activeRegionId){
+                $q->whereHas('serpo', function($qq) use ($activeRegionId){
+                    $qq->where('id_region', $activeRegionId);
+                });
+            })
+            ->selectRaw("
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as acc,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'review admin' THEN 1 ELSE 0 END) as review_admin,
+                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+            ")
+            ->first();
+
+        $statusStats = [
+            'acc'      => (int) ($statusCounts->acc ?? 0),
+            'pending'  => (int) ($statusCounts->pending ?? 0),
+            'review_admin'  => (int) ($statusCounts->review_admin ?? 0),
+            'rejected' => (int) ($statusCounts->rejected ?? 0),
         ];
 
         // ---- Top 5 Region by jumlah Serpo ----
-        $serpoByRegion = Region::query()
-            ->withCount('serpos')
-            ->orderByDesc('serpos_count')
-            ->take(5)
-            ->get(['id_region','nama_region']);
+        if ($activeRegionId) {
+            $serpoByRegion = Region::query()
+                ->where('id_region', $activeRegionId)
+                ->withCount(['serpos' => fn($q) => $q->where('id_region', $activeRegionId)])
+                ->get(['id_region','nama_region']);
+        } else {
+            $serpoByRegion = Region::query()
+                ->withCount('serpos')
+                ->orderByDesc('serpos_count')
+                ->take(5)
+                ->get(['id_region','nama_region']);
+        }
 
-        // ---- Top 5 Serpo by jumlah Segmen ----
+        // ---- Top 5 Serpo by jumlah Segmen (scoped) ----
         $segmenBySerpo = Serpo::query()
+            ->tap($applyRegionToSerpo)
             ->withCount('segmens')
             ->orderByDesc('segmens_count')
             ->take(5)
-            ->get(['id_serpo','nama_serpo']);
+            ->get(['id_serpo','nama_serpo','id_region']);
 
-        // ---- Latest data ----
+        // ---- Latest data (scoped) ----
         $latestUsers = UserBestrising::query()
+            ->tap($applyRegionToUser)
             ->with('kategoriUser:id_kategoriuser,nama_kategoriuser')
             ->latest('id_userBestrising')
             ->take(5)
-            ->get(['id_userBestrising','nik','nama','email','kategori_user_id']);
+            ->get(['id_userBestrising','nik','nama','email','kategori_user_id','id_region']);
 
         $latestSerpo = Serpo::query()
+            ->tap($applyRegionToSerpo)
             ->with('region:id_region,nama_region')
             ->latest('id_serpo')
             ->take(5)
             ->get(['id_serpo','nama_serpo','id_region']);
 
         $latestSegmen = Segmen::query()
-            ->with(['serpo:id_serpo,nama_serpo','serpo.region:id_region,nama_region'])
+            ->tap($applyRegionToSegmen)
+            ->with(['serpo:id_serpo,nama_serpo,id_region','serpo.region:id_region,nama_region'])
             ->latest('id_segmen')
             ->take(5)
             ->get(['id_segmen','nama_segmen','id_serpo']);
 
-        // ---- Grafik: distribusi user per kategori ----
-        $userKategori = UserBestrising::select('kategori_user_id', DB::raw('COUNT(*) as total'))
+        // ---- Grafik: distribusi user per kategori (scoped) ----
+        $userKategori = UserBestrising::query()
+            ->tap($applyRegionToUser)
+            ->select('kategori_user_id', DB::raw('COUNT(*) as total'))
             ->groupBy('kategori_user_id')
             ->with(['kategoriUser:id_kategoriuser,nama_kategoriuser'])
             ->get()
@@ -104,18 +170,23 @@ class AdminHomeController extends Controller
         // ---- Grafik: serpo per region (pakai hasil $serpoByRegion) ----
         $serpoPerRegion = collect($serpoByRegion ?? [])->map(fn ($r) => [
             'label' => $r->nama_region,
-            'value' => (int) $r->serpos_count,
+            'value' => (int) ($r->serpos_count ?? 0),
         ])->values();
 
-        // ================== NEW: Top Serpo by Points berdasarkan anchor ==================
-        // SET ANCHOR DI SINI (tanggal rilis). Ubah sesuai kebutuhanmu:
+        // ======= Leaderboard Points per Quarter dari Anchor (scoped ke region bila ada) =======
         $anchor = Carbon::create(2025, 9, 11);
         [$periodStart, $periodEnd, $periodLabel] = $this->currentQuarterRangeFromAnchor($anchor);
 
         $topSerpoPointsQuarter = Checklist::query()
             ->select('id_serpo', DB::raw('SUM(total_point) as points'))
             ->whereNotNull('id_serpo')
+            ->where('status', 'completed')
             ->whereBetween('created_at', [$periodStart, $periodEnd])
+            ->when($activeRegionId, function($q) use ($activeRegionId) {
+                $q->whereHas('serpo', function($qq) use ($activeRegionId){
+                    $qq->where('id_region', $activeRegionId);
+                });
+            })
             ->groupBy('id_serpo')
             ->orderByDesc('points')
             ->with(['serpo:id_serpo,nama_serpo,id_region','serpo.region:id_region,nama_region'])
@@ -127,7 +198,6 @@ class AdminHomeController extends Controller
             'sub'   => $r->serpo && $r->serpo->region ? $r->serpo->region->nama_region : null,
             'value' => (int) $r->points,
         ])->values();
-        // ================================================================================
 
         return view('bestRising.admin.index', [
             'counts'             => $counts,
@@ -139,11 +209,17 @@ class AdminHomeController extends Controller
             'latestSegmen'       => $latestSegmen,
             'userKategori'       => $userKategori,
             'serpoPerRegion'     => $serpoPerRegion,
-            // kirim data periode & leaderboard points (quarter by anchor)
+
             'periodStart'        => $periodStart,
             'periodEnd'          => $periodEnd,
             'periodLabel'        => $periodLabel,
             'serpoPointsQuarter' => $serpoPointsQuarter,
+
+            'sessionRegionId'    => $sessionRegion,
+            'activeRegionId'     => $activeRegionId,
+            'regionOptions'      => $regionOptions,
+
+            'statusStats'        => $statusStats, // ⟵ KPI status
         ]);
     }
 }

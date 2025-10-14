@@ -3,7 +3,7 @@
 
 @section('main')
 @php
-  $items       = $items ?? ($checklist->items ?? collect());
+  $items       = $items ?? ($checklist->itemsTrashed ?? collect());
   $fmtMulai    = optional($checklist->started_at)->format('Y-m-d H:i:s') ?? '-';
   $fmtSelesai  = optional($checklist->submitted_at)->format('Y-m-d H:i:s') ?? '-';
   $team        = $checklist->team ?? '-';
@@ -78,7 +78,7 @@
         <span class="mx-1">•</span>
         Total Star (hitung ulang): <strong>{{ $items->sum('point_earned') }}</strong>
       </div> --}}
-      @if ($items[0]->is_approval == 0 && $status === 'review admin')
+      @if ($items->count() > 0 && $items[0]->is_approval == 0 && $status === 'review admin')
         <div class="d-flex gap-2">
           <button type="button" id="btnApprove" class="btn btn-success mr-2">✓ Setujui Aktivitas</button>
           <button type="button" id="btnReject"  class="btn btn-danger">✗ Tolak Aktivitas</button>
@@ -117,8 +117,7 @@
                   if (empty($beforeSet) && $it->before_photo) $beforeSet = [$it->before_photo];
                   if (empty($afterSet)  && $it->after_photo)  $afterSet  = [$it->after_photo];
                   $st = $it->status ?? '-';
-                  $bd = $st === 'done' ? 'badge-success'
-                       : ($st === 'pending' ? 'badge-warning' : 'badge-secondary');
+                  $bd = $st === 'done' ? 'badge-success' : ($st === 'pending' ? 'badge-warning' : 'badge-secondary');
                 @endphp
                 <tr>
                   <td class="text-nowrap">{{ optional($it->submitted_at)->format('Y-m-d H:i:s') ?? '-' }}</td>

@@ -22,6 +22,11 @@ class Checklist extends Model
         return $this->hasMany(ActivityResult::class);
     }
 
+    public function itemsTrashed()
+    {
+        return $this->hasMany(ActivityResult::class, 'checklist_id')->withTrashed();
+    }
+
     /** Pemilik sesi */
     public function user()
     {

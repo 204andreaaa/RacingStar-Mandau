@@ -78,6 +78,9 @@ Route::middleware('manual.auth')->group(function () {
         Route::resource('checklists', AdminChecklistController::class)->only(['index','show','destroy']);
         Route::post('checklists/{checklist}/review', [AdminChecklistController::class, 'reviewChecklist'])->name('checklists.review');
 
+        Route::get('checklists/{checklist}/items', [AdminChecklistController::class, 'items'])->whereNumber('checklist')->name('checklists.items'); // detail item per checklist (JSON)
+        Route::post('checklists/approve-bulk', [AdminChecklistController::class, 'approveBulk'])->name('checklists.approveBulk');
+
         // Master data (kalau ini memang khusus admin)
         Route::resource('aktifitas',         ActivityController::class)->parameters(['aktifitas' => 'activity'])->names('aktifitas');
         Route::resource('kategori-user',     KategoriUserController::class)->middleware('superadmin.email');

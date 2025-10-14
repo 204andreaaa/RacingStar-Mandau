@@ -5,23 +5,46 @@
 
 <div class="content-wrapper">
   <section class="content-header">
-    <div class="d-flex align-items-center justify-content-between flex-wrap">
-      <div>
+    <div class="d-flex align-items-center justify-content-between flex-wrap w-100">
+      <div class="mb-2">
         <h1 class="mb-1">Selamat datang, {{ $adminName }}</h1>
         <div class="text-muted">
           <span id="greeting">Halo!</span> • <span id="todayLabel"></span> • <span id="clock"></span>
         </div>
       </div>
-      <a href="#" class="btn btn-outline-success mt-2 mt-md-0">
-        <i class="fas fa-question-circle mr-1"></i> Bantuan
-      </a>
+
+      {{-- FILTER REGION: muncul hanya jika TIDAK terkunci oleh session --}}
+      @if(empty($sessionRegionId))
+        <form method="GET" action="{{ url()->current() }}" class="d-flex align-items-center gap-2">
+          <label for="region_id" class="mb-0 me-2 text-nowrap">Filter Region:</label>
+          <select name="region_id" id="region_id" class="form-control form-control-sm" onchange="this.form.submit()">
+            <option value="">All Region</option>
+            @foreach($regionOptions as $rg)
+              <option value="{{ $rg->id_region }}" {{ (string)$rg->id_region === (string)$activeRegionId ? 'selected' : '' }}>
+                {{ $rg->nama_region }}
+              </option>
+            @endforeach
+          </select>
+          @if(request()->has('region_id') && request('region_id') !== '')
+            <a href="{{ url()->current() }}" class="btn btn-sm btn-outline-secondary ms-2">Reset</a>
+          @endif
+        </form>
+      @else
+        {{-- Info region terkunci --}}
+        <div class="text-end small text-muted">
+          Region aktif:
+          <strong>
+            {{ optional(\App\Models\Region::find($sessionRegionId))->nama_region ?? ('#'.$sessionRegionId) }}
+          </strong>
+        </div>
+      @endif
     </div>
   </section>
 
   <section class="content">
     <div class="container-fluid">
 
-      {{-- KPI --}}
+      {{-- KPI utama --}}
       <div class="row g-3">
         <div class="col-12 col-sm-6 col-lg-3">
           <a class="small-box kpi-box" href="{{ route('admin.user-bestrising.index') }}">
@@ -45,6 +68,46 @@
           <a class="small-box kpi-box" href="{{ route('admin.segmen.index') }}">
             <div class="inner"><h3>{{ $counts['segmens'] }}</h3><p>Segmen</p></div>
             <div class="icon"><i class="fas fa-layer-group"></i></div>
+          </a>
+        </div>
+      </div>
+
+      {{-- KPI status checklist (sinkron gaya KPI utama) --}}
+      <div class="row g-3 mt-2 kpi-status">
+        <div class="col-12 col-sm-3">
+          <a class="small-box kpi-box kpi-acc" href="javascript:void(0)">
+            <div class="inner">
+              <h3>{{ $statusStats['acc'] }}</h3>
+              <p>Approved</p>
+            </div>
+            <div class="icon"><i class="fas fa-check-circle"></i></div>
+          </a>
+        </div>
+        <div class="col-12 col-sm-3">
+          <a class="small-box kpi-box kpi-pending" href="javascript:void(0)">
+            <div class="inner">
+              <h3>{{ $statusStats['pending'] }}</h3>
+              <p>Pending</p>
+            </div>
+            <div class="icon"><i class="fas fa-hourglass-half"></i></div>
+          </a>
+        </div>
+        <div class="col-12 col-sm-3">
+          <a class="small-box kpi-box kpi-review-admin" href="javascript:void(0)">
+            <div class="inner">
+              <h3>{{ $statusStats['review_admin'] }}</h3>
+              <p>Review Admin</p>
+            </div>
+            <div class="icon"><i class="fas fa-hourglass-half"></i></div>
+          </a>
+        </div>
+        <div class="col-12 col-sm-3">
+          <a class="small-box kpi-box kpi-reject" href="javascript:void(0)">
+            <div class="inner">
+              <h3>{{ $statusStats['rejected'] }}</h3>
+              <p>Rejected</p>
+            </div>
+            <div class="icon"><i class="fas fa-times-circle"></i></div>
           </a>
         </div>
       </div>
@@ -73,13 +136,12 @@
         </div>
       </div>
 
-      {{-- NEW: Top Serpo by Points (Periode 3 Bulan dari Anchor) --}}
+      {{-- Top Serpo by Points (Periode 3 Bulan dari Anchor) --}}
       <div class="row mt-3">
         <div class="col-xl-8">
           <div class="card h-100">
             <div class="card-header d-flex align-items-center justify-content-between">
               <strong>Top Serpo by Points — {{ $periodLabel }}</strong>
-              {{-- opsional: tombol filter / info --}}
             </div>
             <div class="card-body">
               <div class="chart-box"><canvas id="chartSerpoPointsQuarter"></canvas></div>
@@ -165,84 +227,7 @@
         </div>
       </div>
 
-      {{-- Terbaru --}}
-      {{-- <div class="row mt-3">
-        <div class="col-xl-4">
-          <div class="card h-100">
-            <div class="card-header"><strong>User Terbaru</strong></div>
-            <div class="card-body p-0">
-              <div class="table-responsive">
-                <table class="table table-sm mb-0">
-                  <thead>
-                    <tr>
-                      <th>Nama</th>
-                      <th>Kategori</th>
-                      <th>Email</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @forelse($latestUsers as $u)
-                      <tr>
-                        <td>{{ $u->nama }}</td>
-                        <td>{{ $u->kategoriUser->nama_kategoriuser ?? '-' }}</td>
-                        <td class="text-break">{{ $u->email }}</td>
-                      </tr>
-                    @empty
-                      <tr>
-                        <td colspan="3" class="text-center text-muted p-3">—</td>
-                      </tr>
-                    @endforelse
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-xl-4 mt-3 mt-xl-0">
-          <div class="card h-100">
-            <div class="card-header"><strong>Serpo Terbaru</strong></div>
-            <div class="card-body p-0">
-              <table class="table table-sm mb-0">
-                <thead><tr><th>Serpo</th><th>Region</th></tr></thead>
-                <tbody>
-                  @forelse($latestSerpo as $s)
-                    <tr><td>{{ $s->nama_serpo }}</td><td>{{ $s->region->nama_region ?? '-' }}</td></tr>
-                  @empty
-                    <tr><td colspan="2" class="text-center text-muted p-3">—</td></tr>
-                  @endforelse
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-xl-4 mt-3 mt-xl-0">
-          <div class="card h-100">
-            <div class="card-header"><strong>Segmen Terbaru</strong></div>
-            <div class="card-body p-0">
-              <table class="table table-sm mb-0">
-                <thead><tr><th>Segmen</th><th>Serpo (Region)</th></tr></thead>
-                <tbody>
-                  @forelse($latestSegmen as $g)
-                    <tr>
-                      <td>{{ $g->nama_segmen }}</td>
-                      <td>
-                        {{ $g->serpo->nama_serpo ?? '-' }}
-                        @if($g->serpo && $g->serpo->region)
-                          <span class="text-muted">({{ $g->serpo->region->nama_region }})</span>
-                        @endif
-                      </td>
-                    </tr>
-                  @empty
-                    <tr><td colspan="2" class="text-center text-muted p-3">—</td></tr>
-                  @endforelse
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div> --}}
+      {{-- Terbaru (opsional) --}}
 
     </div>
   </section>
@@ -252,21 +237,44 @@
   .table td, .table th { vertical-align: middle; }
   .table td.text-break { word-break: break-word; max-width: 180px; }
 
-  /* -- FIX icon small-box biar ga “keluar” -- */
-  .kpi-box.small-box{ overflow: hidden; }
-  .kpi-box.small-box .icon{
-    position: absolute !important;
-    top: 14px !important;
-    right: 14px !important;
-    width: auto !important;
-    height: auto !important;
-    line-height: 1 !important;
-    font-size: 28px !important;
-    color: #28a745 !important;
-    opacity: .75 !important;
-    transform: none !important;
+  /* Small-box seragam */
+  .kpi-box.small-box{
+    background:#fff;
+    border:1px solid #e9ecef;
+    border-radius:.5rem;
+    box-shadow:0 1px 1px rgba(0,0,0,.03);
+    overflow:hidden;
   }
-  .kpi-box.small-box .inner{ position: relative; z-index: 1; }
+  .kpi-box.small-box .inner{ position:relative; z-index:1; min-height:64px; padding-right:56px; }
+  .kpi-box.small-box .inner h3{ font-weight:700; color:#1459d2; }
+  .kpi-box.small-box .inner p{ margin-bottom:0; color:#6c757d; }
+
+  .kpi-box.small-box .icon{
+    position:absolute !important;
+    top:14px !important;
+    right:14px !important;
+    width:auto !important;
+    height:auto !important;
+    line-height:1 !important;
+    font-size:28px !important;
+    color:#28a745 !important;
+    opacity:.75 !important;
+    transform:none !important;
+  }
+  .kpi-box.small-box .icon i{ font-size:28px; }
+
+  /* Variasi status */
+  .kpi-status .kpi-acc     { border-left:4px solid #28a745; }
+  .kpi-status .kpi-acc .icon { color:#28a745 !important; }
+
+  .kpi-status .kpi-pending { border-left:4px solid #f0ad4e; }
+  .kpi-status .kpi-pending .icon { color:#f0ad4e !important; }
+
+  .kpi-status .kpi-review-admin { border-left:4px solid #ac07ff; }
+  .kpi-status .kpi-review-admin .icon { color:#ac07ff !important; }
+
+  .kpi-status .kpi-reject  { border-left:4px solid #dc3545; }
+  .kpi-status .kpi-reject .icon { color:#dc3545 !important; }
 
   /* Chart sizing */
   .chart-box{height:280px; position:relative;}
