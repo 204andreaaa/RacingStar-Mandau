@@ -13,6 +13,15 @@
     $p = preg_replace('#^(public|storage)/#', '', $p);
     return '/storage/'.$p; // symlink storage:link harus aktif
   };
+
+  // === URUTKAN ACTIVITIES SESUAI sort_order (naik), lalu id (naik) ===
+  // aman walau $activities array biasa; jadikan Collection dulu
+  $activities = collect($activities ?? [])->sortBy(function($x){
+      $s  = is_numeric($x->sort_order ?? null) ? (int)$x->sort_order : PHP_INT_MAX;
+      $id = is_numeric($x->id ?? null) ? (int)$x->id : 0;
+      // gabung supaya bisa sort multi-key secara stabil
+      return sprintf('%010d-%010d', $s, $id);
+  })->values();
 @endphp
 
 <div class="content-wrapper">

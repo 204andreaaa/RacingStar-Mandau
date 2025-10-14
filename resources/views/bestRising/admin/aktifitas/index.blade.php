@@ -33,6 +33,7 @@
         <thead>
           <tr>
             <th style="width:60px">#</th>
+            <th style="width:90px">Urutan</th>
             <th>Team</th>
             <th>Nama</th>
             <th class="text-end">Star</th>
@@ -63,8 +64,8 @@
         <div class="form-group mb-2">
           <label>Team</label>
           <select name="team_id" id="team_id" class="form-control select2" data-placeholder="-- Pilih Team --" required>
+            <option value=""></option>
             @foreach($teams as $id => $nm)
-              <option value=""></option>
               <option value="{{ $id }}">{{ $nm }}</option>
             @endforeach
           </select>
@@ -89,10 +90,18 @@
           </div>
           <div class="col-md-6">
             <div class="form-group mb-2">
+              <label>Urutan</label>
+              <input type="number" name="sort_order" id="sort_order" class="form-control" min="1" placeholder="Kosongkan = paling bawah">
+              <small class="text-muted">Isi posisi; kosongkan jika ingin ditaruh di paling bawah.</small>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="form-group mb-2">
               <label>Status Aktif</label>
               <select name="is_active" id="is_active" class="form-control select2" data-placeholder="-- Pilih Status --" required>
+                <option value=""></option>
                 @foreach (Dropdown::activeStatusOpt() as $key => $item)
-                  <option value=""></option>
                   <option value="{{ $key }}">{{ $item }}</option>
                 @endforeach
               </select>
@@ -102,8 +111,8 @@
             <div class="form-group mb-2">
               <label>Status Segmen</label>
               <select name="is_checked_segmen" id="is_checked_segmen" class="form-control select2" data-placeholder="-- Pilih Status --" required>
+                <option value=""></option>
                 @foreach (Dropdown::requiredStatusOpt() as $key => $item)
-                  <option value=""></option>
                   <option value="{{ $key }}">{{ $item }}</option>
                 @endforeach
               </select>
@@ -134,7 +143,7 @@
           </div>
         </div>
 
-        {{-- ===== BARU: WAJIB FOTO ===== --}}
+        {{-- ===== WAJIB FOTO ===== --}}
         <div class="form-group mb-2">
           <div class="form-check">
             {{-- hidden 0 supaya uncheck tetap terkirim --}}
@@ -193,11 +202,11 @@ $(function(){
       }
     });
     if ($form.length && $form[0]) $form[0].reset();
-    // pastikan checkbox kembali default (off)
     $('#requires_photo').prop('checked', false);
     SUBS = []; renderSubs();
+    $('#sort_order').val('');
   });
-  
+
   $.ajaxSetup({ headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')} });
 
   const ROUTES = {
@@ -212,9 +221,10 @@ $(function(){
   const table = $('#table-aktifitas').DataTable({
     processing:true, serverSide:true,
     ajax:{ url: ROUTES.index, data: d => { d.team = $('#f_team').val(); } },
-    order:[[2,'asc']],
+    order:[[1,'asc']], // default sort kolom "Urutan"
     columns: [
       {data:'DT_RowIndex', orderable:false, searchable:false},
+      {data:'sort_order', name:'sort_order', className:'text-end'},
       {data:'team', name:'team'},
       {data:'name', name:'name'},
       {data:'point', className:'text-end'},
@@ -226,17 +236,16 @@ $(function(){
 
   $('#f_team').on('change', function(){ table.ajax.reload(); });
 
-    let SUBS = [];
+  let SUBS = [];
 
   const $subInput = $('#sub_input');
   const $chips = $('#subs_chips');
   const $hidden = $('#subs_hidden');
 
-  // Fungsi untuk merender chips dan hidden inputs
   function renderSubs() {
     $chips.empty();
     SUBS.forEach((t, i) => {
-      const esc = $('<div>').text(t).html();  // Escape agar aman di HTML
+      const esc = $('<div>').text(t).html();
       $chips.append(`
         <span class="chip" title="${esc}">
           <span class="txt">${esc}</span>
@@ -244,27 +253,23 @@ $(function(){
         </span>
       `);
     });
-    // Menambahkan hidden inputs untuk dikirim lewat form
     $hidden.empty();
     SUBS.forEach(v => $hidden.append(`<input type="hidden" name="sub_activities[]" value="${$('<div>').text(v).html()}">`));
   }
 
-  // Fungsi untuk menambahkan sub-aktivitas satu per satu
   function addOne(raw) {
     const v = (raw || '').trim();
     if (!v) return;
-    if (SUBS.map(x => x.toLowerCase()).includes(v.toLowerCase())) return; // Cek jika sudah ada
+    if (SUBS.map(x => x.toLowerCase()).includes(v.toLowerCase())) return;
     SUBS.push(v);
     renderSubs();
   }
 
-  // Event untuk tombol Tambah sub-aktivitas
   $('#btnAddSub').on('click', function() {
     addOne($subInput.val());
     $subInput.val('').focus();
   });
 
-  // Event untuk tekan Enter di input
   $subInput.on('keydown', function(e) {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -272,11 +277,10 @@ $(function(){
     }
   });
 
-  // Event untuk hapus sub-aktivitas dari chips
   $chips.on('click', '.x', function() {
     const i = Number($(this).data('i'));
-    SUBS.splice(i, 1);  // Hapus item dari array
-    renderSubs();  // Render ulang chips
+    SUBS.splice(i, 1);
+    renderSubs();
   });
 
   // Add
@@ -286,11 +290,12 @@ $(function(){
     $('#id_row').val('');
     $('#limit_period').val('none');
     $('#limit_quota').val(1);
-    $('#requires_photo').prop('checked', false); // default off
-    
-    const tf = $('#f_team').val(); 
+    $('#sort_order').val('');
+    $('#requires_photo').prop('checked', false);
+
+    const tf = $('#f_team').val();
     if (tf) $('#team_id').val(tf).trigger('change');
-    
+
     $('#modalAktifitas').modal('show');
 
     SUBS = []; renderSubs();
@@ -309,17 +314,14 @@ $(function(){
     $('#is_checked_segmen').val(String($(this).data('is_checked_segmen'))).trigger('change');
     $('#limit_period').val($(this).data('limit_period') || 'none');
     $('#limit_quota').val($(this).data('limit_quota') || 1);
-    $('#requires_photo').prop('checked', String($(this).data('requires_photo')) === '1'); // ⟵ BARU
+    $('#requires_photo').prop('checked', String($(this).data('requires_photo')) === '1');
+    $('#sort_order').val($(this).data('sort_order') || '');
+
     $('#modalAktifitas').modal('show');
 
-    // Set sub_activities yang sudah ada
     let arr = $(this).data('sub_activities');
     if (typeof arr === 'string' && arr.trim() !== '') {
-      try {
-        arr = JSON.parse(arr);  // Parse jika string JSON
-      } catch (e) {
-        arr = [];
-      }
+      try { arr = JSON.parse(arr); } catch (e) { arr = []; }
     }
     if (!Array.isArray(arr)) arr = [];
     SUBS = arr.filter(Boolean).map(String);
@@ -329,19 +331,16 @@ $(function(){
   // Submit create/update
   $('#formAktifitas').on('submit', function(e){
     e.preventDefault();
-    
+
     const id = $('#id_row').val();
-    const body = $(this).serializeArray(); // Serialize as array instead of query string
+    const body = $(this).serializeArray();
     const url = id ? urlUpdate(id) : ROUTES.store;
     const type = 'POST';
 
-    // Pastikan sub_activities[] dikirim bersama data lainnya
     const subActivities = [];
     $('#subs_chips .chip .txt').each(function() {
-      subActivities.push($(this).text());  // Ambil sub-aktivitas yang ada di chips
+      subActivities.push($(this).text());
     });
-
-    // Tambahkan sub_activities[] ke data
     subActivities.forEach(function(sub) {
       body.push({ name: 'sub_activities[]', value: sub });
     });
@@ -372,7 +371,7 @@ $(function(){
     });
   });
 
-  // ====== DELETE FIX ======
+  // DELETE
   $(document).on('click','.btn-delete', function(){
     const id = $(this).data('id');
     const url = urlDestroy(id);

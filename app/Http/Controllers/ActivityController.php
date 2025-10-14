@@ -4,21 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Models\Activity;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
 
 class ActivityController extends Controller
 {
-    // Kalau pakai team_id: 1=Serpo, 2=NOC
+    // 1=Serpo, 2=NOC
     private array $teams = [1 => 'Serpo', 2 => 'NOC'];
 
     public function index(Request $request)
     {
         if ($request->ajax()) {
             $teamFilter = $request->input('team'); // null/'' | 1 | 2
+
             $q = Activity::query()
                 ->when($teamFilter !== null && $teamFilter !== '',
                     fn($qq) => $qq->where('team_id', (int) $teamFilter)
-                );
+                )
+                ->ordered(); // <= default urut
 
             return DataTables::of($q)
                 ->addIndexColumn()
@@ -38,6 +41,7 @@ class ActivityController extends Controller
                             data-limit_period="'.e($r->limit_period ?? 'none').'"
                             data-limit_quota="'.(int)($r->limit_quota ?? 1).'"
                             data-requires_photo="'.($r->requires_photo?1:0).'"
+                            data-sort_order="'.(int)$r->sort_order.'"
                             data-sub_activities=\''.e(json_encode($r->sub_activities ?? [])).'\' >Edit</button>
                         <button type="button" class="btn btn-sm btn-danger btn-delete"
                             data-id="'.$r->id.'">Hapus</button>
@@ -62,7 +66,7 @@ class ActivityController extends Controller
             'requires_photo'    => $r->boolean('requires_photo') ? 1 : 0,
             'sub_activities'    => $subs,
         ]);
-        
+
         $data = $r->validate([
             'team_id'      => ['required','integer','in:1,2'],
             'name'         => ['required','string','max:255'],
@@ -73,15 +77,34 @@ class ActivityController extends Controller
             'limit_period' => ['required','in:none,daily,weekly,monthly'],
             'limit_quota'  => ['required','integer','min:1'],
             'requires_photo' => ['nullable','boolean'],
-            'sub_activities' => ['nullable','array'],
-            'sub_activities.*' => ['nullable','string'],
+            'sub_activities'  => ['nullable','array'],
+            'sub_activities.*'=> ['nullable','string'],
+            'sort_order'      => ['nullable','integer','min:1'],
         ]);
 
-        Activity::create($data);
+        DB::transaction(function () use (&$data) {
+            $teamId = (int)$data['team_id'];
+            $pos    = (int)($data['sort_order'] ?? 0);
+
+            $max = (int)(Activity::where('team_id', $teamId)->max('sort_order') ?? 0);
+            if ($pos <= 0) {
+                $data['sort_order'] = $max + 1;
+            } else {
+                $pos = max(1, min($pos, $max + 1));
+                // geser range ke bawah: >= pos => +1
+                Activity::where('team_id', $teamId)
+                    ->where('sort_order', '>=', $pos)
+                    ->update(['sort_order' => DB::raw('sort_order + 1')]);
+                $data['sort_order'] = $pos;
+            }
+
+            Activity::create($data);
+        });
+
         return response()->json(['message' => 'Aktivitas dibuat']);
     }
 
-    public function update(Request $r, Activity $activity) // param harus {activity}
+    public function update(Request $r, Activity $activity)
     {
         $subs = $this->normalizeSubs($r->input('sub_activities', []));
 
@@ -91,7 +114,7 @@ class ActivityController extends Controller
             'requires_photo'    => $r->boolean('requires_photo') ? 1 : 0,
             'sub_activities'    => $subs,
         ]);
-        
+
         $data = $r->validate([
             'team_id'      => ['required','integer','in:1,2'],
             'name'         => ['required','string','max:255'],
@@ -104,39 +127,106 @@ class ActivityController extends Controller
             'requires_photo' => ['nullable','boolean'],
             'sub_activities'     => ['nullable','array'],
             'sub_activities.*'   => ['nullable','string'],
+            'sort_order'         => ['nullable','integer','min:1'],
         ]);
 
-        $activity->update($data);
+        DB::transaction(function () use (&$data, $activity) {
+            $oldTeam = (int)$activity->team_id;
+            $oldPos  = (int)$activity->sort_order;
+            $newTeam = (int)$data['team_id'];
+            $newPos  = (int)($data['sort_order'] ?? 0);
+
+            // Kalau ganti team
+            if ($newTeam !== $oldTeam) {
+                // tutup celah di tim lama
+                Activity::where('team_id', $oldTeam)
+                    ->where('sort_order', '>', $oldPos)
+                    ->update(['sort_order' => DB::raw('sort_order - 1')]);
+
+                $maxNew = (int)(Activity::where('team_id', $newTeam)->max('sort_order') ?? 0);
+                if ($newPos <= 0) {
+                    $newPos = $maxNew + 1;
+                } else {
+                    $newPos = max(1, min($newPos, $maxNew + 1));
+                    Activity::where('team_id', $newTeam)
+                        ->where('sort_order', '>=', $newPos)
+                        ->update(['sort_order' => DB::raw('sort_order + 1')]);
+                }
+
+                $data['sort_order'] = $newPos;
+                $activity->update($data);
+                return;
+            }
+
+            // Team sama (reposition / atau tidak)
+            $max = (int)(Activity::where('team_id', $oldTeam)->max('sort_order') ?? 0);
+
+            if ($newPos <= 0) {
+                // tidak mengubah posisi (pakai posisi lama)
+                $data['sort_order'] = $oldPos;
+                $activity->update($data);
+                return;
+            }
+
+            $newPos = max(1, min($newPos, $max)); // saat update, range 1..max
+
+            if ($newPos === $oldPos) {
+                $data['sort_order'] = $oldPos;
+                $activity->update($data);
+                return;
+            }
+
+            if ($newPos < $oldPos) {
+                // naik ke atas: geser [newPos .. oldPos-1] +1
+                Activity::where('team_id', $oldTeam)
+                    ->whereBetween('sort_order', [$newPos, $oldPos - 1])
+                    ->update(['sort_order' => DB::raw('sort_order + 1')]);
+            } else {
+                // turun ke bawah: geser [oldPos+1 .. newPos] -1
+                Activity::where('team_id', $oldTeam)
+                    ->whereBetween('sort_order', [$oldPos + 1, $newPos])
+                    ->update(['sort_order' => DB::raw('sort_order - 1')]);
+            }
+
+            $data['sort_order'] = $newPos;
+            $activity->update($data);
+        });
+
         return response()->json(['message' => 'Aktivitas diupdate']);
     }
 
-    // ==== FIX DELETE ====
-    public function destroy(Activity $activity) // implicit binding ke {activity}
+    public function destroy(Activity $activity)
     {
-        $activity->delete();
+        DB::transaction(function () use ($activity) {
+            $teamId = (int)$activity->team_id;
+            $pos    = (int)$activity->sort_order;
+
+            $activity->delete();
+
+            // Tutup celah
+            Activity::where('team_id', $teamId)
+                ->where('sort_order', '>', $pos)
+                ->update(['sort_order' => DB::raw('sort_order - 1')]);
+        });
+
         return response()->json(['message' => 'Aktivitas dihapus']);
     }
-    
+
     private function normalizeSubs($in): array
     {
-        // Jika string JSON / teks tempelan
         if (is_string($in)) {
             $trim = trim($in);
             if ($trim === '') return [];
             $dec = json_decode($trim, true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($dec)) $in = $dec;
-            else {
-                // pecah baris & koma
-                $in = preg_split('/[\r\n,]+/', $trim);
-            }
+            else $in = preg_split('/[\r\n,]+/', $trim);
         }
         if (!is_array($in)) $in = [];
-
-        // Bersihkan & unik (case-insensitive)
-        $in = array_map(function($v){ return is_scalar($v) ? trim((string)$v) : ''; }, $in);
+        $in = array_map(fn($v) => is_scalar($v) ? trim((string)$v) : '', $in);
         $in = array_filter($in, fn($v) => $v !== '');
         $in = array_values(array_intersect_key($in, array_unique(array_map('mb_strtolower', $in))));
         return $in;
+
     }
 
     public function create(){ abort(404); }
