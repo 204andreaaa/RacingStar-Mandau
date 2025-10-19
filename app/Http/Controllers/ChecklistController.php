@@ -364,5 +364,37 @@ class ChecklistController extends Controller
             'count' => $q->count(),
         ]);
     }
+
+    public function counts(Request $r)
+    {
+        // Filter dasar sama seperti di index: region, serpo, dan optional search
+        $q = Checklist::query()
+            ->when($r->region, fn($qq) => $qq->where('id_region', $r->region))
+            ->when($r->serpo,  fn($qq) => $qq->where('id_serpo',  $r->serpo));
+
+        // Samakan perilaku search minimal yang umum dipakai
+        if ($s = trim((string) $r->search)) {
+            $q->where(function ($qq) use ($s) {
+                $qq->where('team', 'like', "%{$s}%")
+                   ->orWhere('status', 'like', "%{$s}%")
+                   ->orWhereHas('user',   fn($uq) => $uq->where('nama', 'like', "%{$s}%"))
+                   ->orWhereHas('region', fn($rq) => $rq->where('nama_region', 'like', "%{$s}%"))
+                   ->orWhereHas('serpo',  fn($sq) => $sq->where('nama_serpo',  'like', "%{$s}%"));
+            });
+        }
+
+        // Clone base untuk tiap hitungan status
+        $base = clone $q;
+
+        $data = [
+            'all'          => (clone $base)->count(),
+            'review admin' => (clone $base)->where('status', 'review admin')->count(), // perhatikan spasi
+            'pending'      => (clone $base)->where('status', 'pending')->count(),
+            'completed'    => (clone $base)->where('status', 'completed')->count(),
+            'rejected'     => (clone $base)->where('status', 'rejected')->count(),     // "rejected" (bukan reject)
+        ];
+
+        return response()->json(['data' => $data]);
+    }
 }
 

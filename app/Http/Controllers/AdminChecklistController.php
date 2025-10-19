@@ -15,9 +15,36 @@ use Carbon\Carbon;
 
 class AdminChecklistController extends Controller
 {
-    /**
-     * Ambil ID region dari session auth_user (kalau ada).
-     */
+    public function totalStar(Request $req)
+    {
+        $sessionRegionId = $this->sessionRegionId();
+
+        $region = $sessionRegionId ?? ($req->filled('region') ? (int)$req->region : null);
+        $serpo  = $req->filled('serpo') ? (int)$req->serpo : null;
+        $from   = $req->input('date_from');
+        $to     = $req->input('date_to');
+
+        $q = DB::table('activity_results as ar')
+            ->join('user_bestrising as u', 'u.id_userBestrising', '=', 'ar.user_id')
+            ->where('ar.is_approval', true)
+            ->whereNull('ar.deleted_at');
+
+        if (!is_null($region)) $q->where('u.id_region', $region);
+        if (!is_null($serpo))  $q->where('u.id_serpo',  $serpo);
+
+        // pakai submitted_at biar konsisten dengan allresult()
+        if ($from || $to) {
+            if ($from && $to)       $q->whereBetween(DB::raw('DATE(ar.submitted_at)'), [$from, $to]);
+            elseif ($from)          $q->whereDate('ar.submitted_at', '>=', $from);
+            elseif ($to)            $q->whereDate('ar.submitted_at', '<=', $to);
+        }
+
+        $total = (int) ($q->sum(DB::raw('COALESCE(ar.point_earned,0)')) ?? 0);
+
+        return response()->json(['total_star' => $total]);
+    }
+    
+    // Ambil ID region dari session auth_user (kalau ada).
     private function sessionRegionId(): ?int
     {
         // Sesuaikan key jika beda: 'id_region' di session('auth_user')

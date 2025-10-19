@@ -75,7 +75,7 @@
       {{-- KPI status checklist (sinkron gaya KPI utama) --}}
       <div class="row g-3 mt-2 kpi-status">
         <div class="col-12 col-sm-3">
-          <a class="small-box kpi-box kpi-acc" href="javascript:void(0)">
+          <a class="small-box kpi-box kpi-acc" href="{{ route('admin.checklists.index') }}">
             <div class="inner">
               <h3>{{ $statusStats['acc'] }}</h3>
               <p>Approved</p>
@@ -84,7 +84,7 @@
           </a>
         </div>
         <div class="col-12 col-sm-3">
-          <a class="small-box kpi-box kpi-pending" href="javascript:void(0)">
+          <a class="small-box kpi-box kpi-pending" href="{{ route('admin.checklists.index') }}">
             <div class="inner">
               <h3>{{ $statusStats['pending'] }}</h3>
               <p>Pending</p>
@@ -93,7 +93,7 @@
           </a>
         </div>
         <div class="col-12 col-sm-3">
-          <a class="small-box kpi-box kpi-review-admin" href="javascript:void(0)">
+          <a class="small-box kpi-box kpi-review-admin" href="{{ route('admin.checklists.index') }}">
             <div class="inner">
               <h3>{{ $statusStats['review_admin'] }}</h3>
               <p>Review Admin</p>
@@ -102,7 +102,7 @@
           </a>
         </div>
         <div class="col-12 col-sm-3">
-          <a class="small-box kpi-box kpi-reject" href="javascript:void(0)">
+          <a class="small-box kpi-box kpi-reject" href="{{ route('admin.checklists.index') }}">
             <div class="inner">
               <h3>{{ $statusStats['rejected'] }}</h3>
               <p>Rejected</p>
@@ -281,7 +281,8 @@
   @media (max-width: 575.98px){ .chart-box{height:240px;} }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{{-- Pin versi Chart.js dan tambahkan lazy-init + animasi --}}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 (function(){
   const g=document.getElementById('greeting'), c=document.getElementById('clock'), t=document.getElementById('todayLabel');
@@ -291,48 +292,99 @@
   greet(); today(); tick(); setInterval(tick,1000);
 })();
 
-// Chart.js init
-(function(){
-  const userKategori       = @json($userKategori ?? []);
-  const serpoPerRegion     = @json($serpoPerRegion ?? []);
-  const serpoPointsQuarter = @json($serpoPointsQuarter ?? []);
+// ====== Chart.js defaults: paksa animasi aktif ======
+if (window.Chart) {
+  Chart.defaults.animation = { duration: 900, easing: 'easeOutQuart' };
+}
 
-  // Donut: user per kategori
-  const donutCtx = document.getElementById('chartUserKategori');
-  if (donutCtx && userKategori.length){
-    new Chart(donutCtx, {
-      type: 'doughnut',
-      data: { labels: userKategori.map(x => x.label), datasets: [{ data: userKategori.map(x => x.value) }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '55%' }
-    });
-  }
+// ====== Helper: buat chart saat kanvas terlihat (biar animasi selalu kelihatan)
+function makeChartWhenVisible(canvasId, makeConfig){
+  const el = document.getElementById(canvasId);
+  if (!el) return;
 
-  // Horizontal bar: serpo per region
-  const barRegionCtx = document.getElementById('chartSerpoRegion');
-  if (barRegionCtx && serpoPerRegion.length){
-    new Chart(barRegionCtx, {
-      type: 'bar',
-      data: { labels: serpoPerRegion.map(x => x.label), datasets: [{ label: 'Serpo', data: serpoPerRegion.map(x => x.value) }] },
-      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
-    });
-  }
+  const create = () => {
+    if (el._chartInstance) return;
+    const cfg = makeConfig();
+    if (!cfg) return;
+    el._chartInstance = new Chart(el, cfg);
+  };
 
-  // Horizontal bar: top serpo by points (quarter dari anchor)
-  const barPointsCtx = document.getElementById('chartSerpoPointsQuarter');
-  if (barPointsCtx && serpoPointsQuarter.length){
-    new Chart(barPointsCtx, {
-      type: 'bar',
-      data: {
-        labels: serpoPointsQuarter.map(x => x.sub ? `${x.label} — ${x.sub}` : x.label),
-        datasets: [{ label: 'Points', data: serpoPointsQuarter.map(x => x.value) }]
+  const rect = el.getBoundingClientRect();
+  const visible = rect.top < innerHeight && rect.bottom > 0;
+  if (visible) { create(); return; }
+
+  const io = new IntersectionObserver((entries, obs) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { create(); obs.unobserve(e.target); break; }
+    }
+  }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
+  io.observe(el);
+}
+
+// ====== Data dari controller
+const userKategori       = @json($userKategori ?? []);
+const serpoPerRegion     = @json($serpoPerRegion ?? []);
+const serpoPointsQuarter = @json($serpoPointsQuarter ?? []);
+
+// ====== Donut: user per kategori
+makeChartWhenVisible('chartUserKategori', () => {
+  if (!userKategori.length) return null;
+  return {
+    type: 'doughnut',
+    data: {
+      labels: userKategori.map(x => x.label),
+      datasets: [{ data: userKategori.map(x => x.value) }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      cutout: '55%',
+      animation: { duration: 900, easing: 'easeOutQuart', animateRotate: true, animateScale: true }
+    }
+  };
+});
+
+// ====== Horizontal bar: serpo per region
+makeChartWhenVisible('chartSerpoRegion', () => {
+  if (!serpoPerRegion.length) return null;
+  return {
+    type: 'bar',
+    data: {
+      labels: serpoPerRegion.map(x => x.label),
+      datasets: [{ label: 'Serpo', data: serpoPerRegion.map(x => x.value) }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+      animation: { duration: 900, easing: 'easeOutQuart' },
+      animations: { x: { from: 0 }, y: { from: 0 } }
+    }
+  };
+});
+
+// ====== Horizontal bar: top serpo by points (quarter)
+makeChartWhenVisible('chartSerpoPointsQuarter', () => {
+  if (!serpoPointsQuarter.length) return null;
+  return {
+    type: 'bar',
+    data: {
+      labels: serpoPointsQuarter.map(x => x.sub ? `${x.label} — ${x.sub}` : x.label),
+      datasets: [{ label: 'Points', data: serpoPointsQuarter.map(x => x.value) }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx)=> ` ${ctx.raw} poin` } }
       },
-      options: {
-        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx)=> ` ${ctx.raw} poin` } } },
-        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
-      }
-    });
-  }
-})();
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+      animation: { duration: 900, easing: 'easeOutQuart' },
+      animations: { x: { from: 0 }, y: { from: 0 } }
+    }
+  };
+});
 </script>
 @endsection

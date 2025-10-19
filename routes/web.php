@@ -71,6 +71,8 @@ Route::middleware('manual.auth')->group(function () {
         Route::get('checklists/allresult/export', [AdminChecklistController::class, 'exportAllResult'])->name('checklists.allresult.export');
         Route::delete('checklists/destroy-all', [AdminChecklistController::class, 'destroyAll'])->name('checklists.destroyAll')->middleware('superadmin.email');
         Route::get('user-bestrising/next-nik', [UserBestrisingController::class, 'nextNik'])->name('user-bestrising.nextNik');
+        Route::get('checklists/counts', [ChecklistController::class, 'counts'])->name('checklists.counts');
+        Route::get('checklists/total-star', [AdminChecklistController::class, 'totalStar'])->name('checklists.totalStar');
 
 
         Route::get('checklists/allresult', [AdminChecklistController::class, 'allresult'])->name('checklists.allresult');

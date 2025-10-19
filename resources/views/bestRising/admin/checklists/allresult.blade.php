@@ -59,6 +59,32 @@
         </div>
       </div>
 
+      {{-- TOTAL STAR (Region, Serpo, Date) --}}
+      <div class="row mb-3">
+        <div class="col">
+          <div id="total-star-card" class="ts-card shadow-sm">
+            <div class="ts-left">
+              <div class="ts-icon" aria-hidden="true">
+                <!-- bootstrap icon star (inline) -->
+                <svg viewBox="0 0 16 16" width="22" height="22" fill="currentColor">
+                  <path d="M2.866 14.85c-.078.444.36.791.746.593L8 12.694l4.389 2.75c.386.198.824-.149.746-.592l-1.07-4.764 3.523-3.356c.33-.314.16-.888-.283-.95l-4.898-.696L8.465.792a.513.513 0 0 0-.93 0L5.597 3.387l-4.898.696c-.443.063-.613.637-.282.95l3.522 3.356-1.07 4.764Z"/>
+                </svg>
+              </div>
+              <div class="ts-text">
+                <div class="ts-label">Total Star</div>
+                <div class="ts-value" id="total-star">0</div>
+                <div class="ts-sub" id="ts-filter-label">Region: Semua • Serpo: Semua</div>
+              </div>
+            </div>
+            <div class="ts-right">
+              <span class="ts-chip">Approved only</span>
+            </div>
+            <div class="ts-shine"></div>
+          </div>
+        </div>
+      </div>
+
+
       <table id="table-results" class="table table-bordered table-striped w-100">
         <thead>
         <tr>
@@ -128,49 +154,96 @@
     cursor:pointer;
   }
   table.dataTable td, table.dataTable th { vertical-align: middle; }
-
-  .photo-scroller{
-    display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;
-    scroll-snap-type:x proximity; max-width:220px;
-  }
+  .photo-scroller{ display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; scroll-snap-type:x proximity; max-width:220px; }
   .photo-scroller::-webkit-scrollbar{ height:8px; }
   .photo-scroller::-webkit-scrollbar-thumb{ background:rgba(0,0,0,.18); border-radius:8px; }
   .photo-item{ scroll-snap-align:start; position:relative; display:inline-block; }
-  .photo-badge{
-    position:absolute; left:4px; bottom:4px; background:rgba(0,0,0,.6);
-    color:#fff; font-size:10px; padding:1px 4px; border-radius:3px; line-height:1;
-  }
+  .photo-badge{ position:absolute; left:4px; bottom:4px; background:rgba(0,0,0,.6); color:#fff; font-size:10px; padding:1px 4px; border-radius:3px; line-height:1; }
   #photoCarousel .carousel-item{ background:#000; min-height:60vh; }
-  #photoCarousel .carousel-item img{
-    max-height:80vh; width:auto; height:auto; object-fit:contain; display:block; margin:auto;
+  #photoCarousel .carousel-item img{ max-height:80vh; width:auto; height:auto; object-fit:contain; display:block; margin:auto; }
+
+    /* --- Total Star Card --- */
+  .ts-card{
+    position:relative;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; padding:14px 18px;
+    border-radius:16px;
+    background: linear-gradient(135deg, rgba(255,255,255,.7), rgba(255,255,255,.35));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border:1px solid rgba(255,255,255,.4);
+    box-shadow: 0 6px 18px rgba(17, 38, 146, .08);
+    overflow:hidden;
   }
+  .ts-card:hover{ transform: translateY(-1px); transition: transform .2s ease; box-shadow: 0 10px 24px rgba(17,38,146,.12); }
+  .ts-left{ display:flex; align-items:center; gap:12px; }
+  .ts-icon{
+    width:44px; height:44px; border-radius:12px;
+    display:grid; place-items:center;
+    color:#fff; background: linear-gradient(135deg, #FFC107, #FF8A00);
+    box-shadow: inset 0 0 10px rgba(255,255,255,.2), 0 6px 12px rgba(255,138,0,.25);
+  }
+  .ts-text .ts-label{ font-size:.8rem; color:#6b7280; letter-spacing:.2px; }
+  .ts-text .ts-value{ font-weight:800; font-size:1.6rem; line-height:1; color:#111827; }
+  .ts-text .ts-sub{ font-size:.78rem; color:#6b7280; margin-top:2px; }
+  .ts-right .ts-chip{
+    font-size:.72rem; padding:6px 10px; border-radius:999px;
+    background:rgba(76,175,80,.1); color:#2e7d32; border:1px solid rgba(46,125,50,.15);
+  }
+
+  /* Shine effect */
+  .ts-shine{
+    position:absolute; inset:-1px; pointer-events:none; border-radius:inherit;
+    background: radial-gradient(120px 80px at 0% -10%, rgba(255,255,255,.55), transparent 60%),
+                linear-gradient(120deg, rgba(255,255,255,.15), transparent 40% 60%, rgba(255,255,255,.08));
+    opacity:.7; mix-blend-mode: screen;
+  }
+
+  /* Loading state */
+  .ts-card.loading .ts-value,
+  .ts-card.loading .ts-sub{
+    position:relative; color:transparent;
+  }
+  .ts-card.loading .ts-value::after,
+  .ts-card.loading .ts-sub::after{
+    content:""; position:absolute; left:0; top:0; right:0; bottom:0; border-radius:6px;
+    background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(0,0,0,.12), rgba(0,0,0,.06));
+    animation: ts-shimmer 1.2s linear infinite;
+  }
+  .ts-card.loading .ts-value::after{ height:1.2em; }
+  .ts-card.loading .ts-sub::after{ height:1em; width:70%; top:1.6em; }
+
+  @keyframes ts-shimmer{
+    0%{ transform: translateX(-100%); }
+    100%{ transform: translateX(100%); }
+  }
+
 </style>
 <style>
-/* Modal viewer rapi */
-#photoModal .modal-dialog { max-width: 900px; }
-#photoModal .modal-content { background-color:#000; border:none; border-radius:10px; overflow:hidden; }
-#photoModal .modal-header { background:#111; color:#fff; border-bottom:none; padding:10px 15px; }
-#photoModal .modal-header .close { color:#fff; opacity:.8; font-size:26px; }
-#photoModal .modal-body { padding:0; position:relative; }
-#photoModal .modal-footer { background:#111; border-top:none; justify-content:center; color:#aaa; font-size:13px; }
-#photoCarousel .carousel-item { background:#000; min-height:70vh; }
-#photoCarousel .carousel-item.active,
-#photoCarousel .carousel-item-next,
-#photoCarousel .carousel-item-prev { display:flex; align-items:center; justify-content:center; transition:transform .4s ease; }
-#photoCarousel .carousel-item img { max-height:75vh; width:auto; object-fit:contain; box-shadow:0 0 10px rgba(0,0,0,.5); border-radius:4px; }
-#photoCarousel .carousel-control-prev, #photoCarousel .carousel-control-next { width:8%; }
-#photoCarousel .carousel-control-prev-icon, #photoCarousel .carousel-control-next-icon { filter: drop-shadow(0 0 4px rgba(0,0,0,.8)); }
-#photoCarousel .carousel-indicators { bottom:8px; }
-#photoCarousel .carousel-indicators li { background-color:#999; width:20px; height:4px; border-radius:2px; transition:all .3s ease; }
-#photoCarousel .carousel-indicators .active { background-color:#fff; width:30px; }
-.thumb-img { cursor:pointer; transition: transform .2s ease, box-shadow .2s ease; }
-.thumb-img:hover { transform:scale(1.05); box-shadow:0 2px 8px rgba(0,0,0,.25); }
+  #photoModal .modal-dialog { max-width: 900px; }
+  #photoModal .modal-content { background-color:#000; border:none; border-radius:10px; overflow:hidden; }
+  #photoModal .modal-header { background:#111; color:#fff; border-bottom:none; padding:10px 15px; }
+  #photoModal .modal-header .close { color:#fff; opacity:.8; font-size:26px; }
+  #photoModal .modal-body { padding:0; position:relative; }
+  #photoModal .modal-footer { background:#111; border-top:none; justify-content:center; color:#aaa; font-size:13px; }
+  #photoCarousel .carousel-item { background:#000; min-height:70vh; }
+  #photoCarousel .carousel-item.active,
+  #photoCarousel .carousel-item-next,
+  #photoCarousel .carousel-item-prev { display:flex; align-items:center; justify-content:center; transition:transform .4s ease; }
+  #photoCarousel .carousel-item img { max-height:75vh; width:auto; object-fit:contain; box-shadow:0 0 10px rgba(0,0,0,.5); border-radius:4px; }
+  #photoCarousel .carousel-control-prev, #photoCarousel .carousel-control-next { width:8%; }
+  #photoCarousel .carousel-control-prev-icon, #photoCarousel .carousel-control-next-icon { filter: drop-shadow(0 0 4px rgba(0,0,0,.8)); }
+  #photoCarousel .carousel-indicators { bottom:8px; }
+  #photoCarousel .carousel-indicators li { background-color:#999; width:20px; height:4px; border-radius:2px; transition:all .3s ease; }
+  #photoCarousel .carousel-indicators .active { background-color:#fff; width:30px; }
+  .thumb-img { cursor:pointer; transition: transform .2s ease, box-shadow .2s ease; }
+  .thumb-img:hover { transform:scale(1.05); box-shadow:0 2px 8px rgba(0,0,0,.25); }
 </style>
 
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 <script>
-  // Inject dari controller
+  // dari controller
   const SESSION_REGION_ID = {{ (int)($sessionRegionId ?? 0) }};
 
   function buildExportUrl(){
@@ -204,10 +277,9 @@
       });
     }
 
-    // Jika session region ada → preset & lock region filter
+    // Lock region dari session jika ada
     if (SESSION_REGION_ID > 0) {
       $('#f_region').val(String(SESSION_REGION_ID)).prop('disabled', true).trigger('change');
-      // preload serpo list buat region ini
       $.get("{{ route('admin.serpo.byRegion', ['id_region' => 'IDR']) }}".replace('IDR', SESSION_REGION_ID))
         .done(res => fillOptions($('#f_serpo'), (res?.data ?? res), 'Semua'));
     }
@@ -218,7 +290,6 @@
       fillOptions($('#f_serpo'),  null);
       fillOptions($('#f_segmen'), null);
       if (!id) return;
-
       $.get("{{ route('admin.serpo.byRegion', ['id_region' => 'IDR']) }}".replace('IDR', id))
         .done(res => fillOptions($('#f_serpo'), (res?.data ?? res), 'Semua'))
         .fail(() => fillOptions($('#f_serpo'), null, 'Semua'));
@@ -228,7 +299,6 @@
       const id = $(this).val();
       fillOptions($('#f_segmen'), null);
       if (!id) return;
-
       $.get("{{ route('admin.segmen.bySerpo', ['id_serpo' => 'IDS']) }}".replace('IDS', id))
         .done(res => fillOptions($('#f_segmen'), (res?.data ?? res), 'Semua'))
         .fail(() => fillOptions($('#f_segmen'), null, 'Semua'));
@@ -243,7 +313,6 @@
         url: "{{ route('admin.checklists.allresult') }}",
         type: 'GET',
         data: function(d){
-          // kalau session region ada, kirimkan juga (server tetap enforce)
           d.region    = SESSION_REGION_ID > 0 ? SESSION_REGION_ID : ($('#f_region').val() || '');
           d.serpo     = $('#f_serpo').val()  || '';
           d.segmen    = $('#f_segmen').val() || '';
@@ -253,7 +322,7 @@
           return d;
         }
       },
-      order: [[14,'desc']], // Created At (index 14)
+      order: [[14,'desc']], // Created At
       columns: [
         { data:'DT_RowIndex', orderable:false, searchable:false },
 
@@ -269,13 +338,9 @@
           data: 'sub_activity_nama', 
           name: 'ar.sub_activities', 
           defaultContent: '-', 
-          render: function(data, type, row) {
-              // Jika data adalah array atau JSON, gabungkan menjadi string
-              if (Array.isArray(data)) {
-                  return data.join(', ').replace(/"/g, '');  // Menggabungkan array menjadi string dengan koma dan menghapus tanda kutip
-              }
-              // Hapus tanda kutip jika data adalah string biasa
-              return (data || '').replace(/"/g, '') || '-';  // Menghilangkan kutip dan menampilkan '-' jika data kosong
+          render: function(data) {
+            if (Array.isArray(data)) return data.join(', ').replace(/"/g, '');
+            return (data || '').replace(/"/g, '') || '-';
           }
         },
         { data:'region_nama',   name:'r.nama_region', defaultContent:'-' },
@@ -294,27 +359,67 @@
       pageLength: 25
     });
 
+    // === Total Star (Region, Serpo, Date only) ===
+    function updateTotalStar(){
+      // tampilkan label filter yang sedang aktif
+      const regionTxt = (SESSION_REGION_ID > 0)
+          ? $('#f_region option:selected').text() || 'Ter-lock'
+          : ($('#f_region option:selected').text() || 'Semua');
+      const serpoTxt  = $('#f_serpo option:selected').text() || 'Semua';
+      const from      = $('#f_from').val();
+      const to        = $('#f_to').val();
+      const dateLbl   = (from || to) ? ` • Date: ${from || '...'} → ${to || '...'}` : '';
+      $('#ts-filter-label').text(`Region: ${regionTxt} • Serpo: ${serpoTxt}${dateLbl}`);
+
+      // loading state on
+      $('#total-star-card').addClass('loading');
+
+      $.ajax({
+        url: "{{ route('admin.checklists.totalStar') }}",
+        type: "GET",
+        data: {
+          region:    SESSION_REGION_ID > 0 ? SESSION_REGION_ID : ($('#f_region').val() || ''),
+          serpo:     $('#f_serpo').val()  || '',
+          date_from: from || '',
+          date_to:   to   || ''
+        },
+        success: function(res){
+          $('#total-star').text(res.total_star ?? 0);
+        },
+        error: function(){
+          $('#total-star').text('0');
+        },
+        complete: function(){
+          // loading state off
+          $('#total-star-card').removeClass('loading');
+        }
+      });
+    }
+
     // Apply / Reset
-    $('#btnApply').on('click', function(){ table.ajax.reload(null, false); });
+    $('#btnApply').on('click', function(){
+      table.ajax.reload(null, false);
+      updateTotalStar();
+    });
 
     $('#btnReset').on('click', function(){
-      // kalau region forced, jangan direset
-      if (SESSION_REGION_ID > 0) {
-        $('#f_region').val(String(SESSION_REGION_ID));
-      } else {
-        $('#f_region').val('');
-      }
+      if (SESSION_REGION_ID > 0) { $('#f_region').val(String(SESSION_REGION_ID)); }
+      else { $('#f_region').val(''); }
       fillOptions($('#f_serpo'),  null);
       fillOptions($('#f_segmen'), null);
       $('#f_from,#f_to,#f_name').val('');
       table.ajax.reload(null, false);
+      updateTotalStar();
     });
 
-    // Preview Modal
+    // initial
+    updateTotalStar();
+
+    // Preview Modal & gesture
     $(document).on('click', '#table-results img.thumb-img', function () {
       const $imgClicked = $(this);
-      const $cell       = $imgClicked.closest('td');
-      const $row        = $imgClicked.closest('tr');
+      const $cell = $imgClicked.closest('td');
+      const $row  = $imgClicked.closest('tr');
 
       const badge = ($imgClicked.siblings('.photo-badge').text() || '').trim().toUpperCase();
       const groupLabel = (badge === 'B') ? 'Before Photos' : (badge === 'A' ? 'After Photos' : 'Photos');
@@ -324,7 +429,7 @@
 
       let startIndex = 0;
       const indicators = [];
-      const slides     = [];
+      const slides = [];
 
       $imgs.each(function(i){
         const $im  = $(this);
@@ -332,18 +437,13 @@
         const alt  = $im.attr('alt') || `${groupLabel} ${i+1}`;
         if (this === $imgClicked[0]) startIndex = i;
         indicators.push(`<li data-target="#photoCarousel" data-slide-to="${i}" class="${i===0?'active':''}"></li>`);
-        slides.push(
-          `<div class="carousel-item ${i===0?'active':''}">
-            <img src="${full}" alt="${alt}">
-          </div>`
-        );
+        slides.push(`<div class="carousel-item ${i===0?'active':''}"><img src="${full}" alt="${alt}"></div>`);
       });
 
       try { $('#photoCarousel').carousel('dispose'); } catch(e) {}
-
       $('#photoCarousel .carousel-indicators').html(indicators.join(''));
       $('#photoCarousel .carousel-inner').html(slides.join(''));
-      $('#photoCarousel').carousel({ interval: false, keyboard: true, ride: false });
+      $('#photoCarousel').carousel({ interval:false, keyboard:true, ride:false });
 
       const many = $imgs.length > 1;
       $('#photoCarousel .carousel-control-prev, #photoCarousel .carousel-control-next').toggle(many);
@@ -361,19 +461,16 @@
       });
     });
 
-    // Swipe support
     (function(){
-      const $carousel = $('#photoCarousel');
-      let startX = 0, dx = 0;
-      $carousel.on('touchstart', function(e){ startX = e.originalEvent.touches[0].clientX; });
-      $carousel.on('touchmove',  function(e){ dx = e.originalEvent.touches[0].clientX - startX; });
-      $carousel.on('touchend',   function(){
-        if (Math.abs(dx) > 40){ $(this).carousel(dx < 0 ? 'next' : 'prev'); }
+      const $carousel = $('#photoCarousel'); let startX = 0, dx = 0;
+      $carousel.on('touchstart', e => { startX = e.originalEvent.touches[0].clientX; });
+      $carousel.on('touchmove',  e => { dx = e.originalEvent.touches[0].clientX - startX; });
+      $carousel.on('touchend',   () => {
+        if (Math.abs(dx) > 40) $carousel.carousel(dx < 0 ? 'next' : 'prev');
         startX = 0; dx = 0;
       });
     })();
 
-    // Keyboard nav saat modal terbuka
     $(document).on('keydown', function(e){
       if (!$('#photoModal').hasClass('show')) return;
       if (e.key === 'ArrowLeft')  $('#photoCarousel').carousel('prev');
