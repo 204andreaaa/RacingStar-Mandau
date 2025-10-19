@@ -65,9 +65,6 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
 
     /* ============================================================
        HELPER: bikin thumbnail kalau belum ada
-       - Support Intervention v2 (ImageManagerStatic)
-       - Support Intervention v3 (ImageManager + Driver)
-       - Fallback ke GD kalau Intervention nggak ada
     ============================================================ */
     private function makeThumb(?string $rel): ?string
     {
@@ -84,7 +81,7 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
 
         @mkdir(dirname($dst), 0775, true);
 
-        // === Try Intervention v2 ===
+        // Intervention v2
         if (class_exists('\\Intervention\\Image\\ImageManagerStatic')) {
             $img = \Intervention\Image\ImageManagerStatic::make($src)
                 ->orientate()
@@ -94,28 +91,24 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
             return $dst;
         }
 
-        // === Try Intervention v3 ===
+        // Intervention v3
         if (class_exists('\\Intervention\\Image\\ImageManager')) {
-            // pilih driver yang tersedia
             $driver = null;
             if (class_exists('\\Intervention\\Image\\Drivers\\Gd\\Driver')) {
                 $driver = new \Intervention\Image\Drivers\Gd\Driver();
             } elseif (class_exists('\\Intervention\\Image\\Drivers\\Imagick\\Driver')) {
                 $driver = new \Intervention\Image\Drivers\Imagick\Driver();
             }
-
             if ($driver) {
                 $manager = new \Intervention\Image\ImageManager($driver);
-                $image = $manager->read($src)
-                    ->orientate()
-                    ->cover(self::THUMB_W_SAVE, self::THUMB_H_SAVE);
+                $image = $manager->read($src)->orientate()->cover(self::THUMB_W_SAVE, self::THUMB_H_SAVE);
                 $image->encode(new \Intervention\Image\Encoders\JpegEncoder(quality: self::THUMB_QUALITY));
                 $image->save($dst);
                 return $dst;
             }
         }
 
-        // === Fallback: GD murni (tanpa Intervention) ===
+        // Fallback GD
         if (function_exists('imagecreatetruecolor')) {
             $info = @getimagesize($src);
             if (!$info) return null;
@@ -129,7 +122,6 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
             }
             if (!$srcIm) return null;
 
-            // cover crop
             $scale = max(self::THUMB_W_SAVE / $sw, self::THUMB_H_SAVE / $sh);
             $nw = (int)ceil($sw * $scale);
             $nh = (int)ceil($sh * $scale);
@@ -146,7 +138,6 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
             return $dst;
         }
 
-        // gagal semua
         return null;
     }
 
@@ -172,7 +163,7 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
             ->leftJoinSub($beforeSub, 'bf', 'bf.activity_result_id', '=', 'ar.id')
             ->leftJoinSub($afterSub, 'af', 'af.activity_result_id', '=', 'ar.id')
             ->select([
-                'ar.id','ar.checklist_id','ar.submitted_at','ar.status',
+                'ar.id','ar.checklist_id','ar.submitted_at','ar.status', 'ar.is_approval',
                 DB::raw('bf.before_photos'),
                 DB::raw('af.after_photos'),
                 'ar.point_earned','ar.note','ar.created_at',
@@ -181,12 +172,22 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
                 DB::raw('COALESCE(r.nama_region, "-") as region_nama'),
                 DB::raw('COALESCE(sp.nama_serpo, "-") as serpo_nama'),
                 DB::raw('COALESCE(sg.nama_segmen, "-") as segmen_nama'),
-            ]);
+            ])
+            // === penting: hanya export yang status COMPLETED ===
+            ->where('ar.is_approval', 1);
 
+        // Region / Serpo
         if (!empty($this->f['region'])) $q->where('u.id_region', (int)$this->f['region']);
         if (!empty($this->f['serpo']))  $q->where('u.id_serpo', (int)$this->f['serpo']);
-        if (!empty($this->f['segmen'])) $q->where('ar.id_segmen', (int)$this->f['segmen']);
 
+        // Segmen: 0 = Tanpa Segmen
+        if (isset($this->f['segmen']) && $this->f['segmen'] !== '') {
+            $seg = (int)$this->f['segmen'];
+            $seg === 0 ? $q->whereNull('ar.id_segmen')
+                       : $q->where('ar.id_segmen', $seg);
+        }
+
+        // Range tanggal (pakai submitted_at)
         if (!empty($this->f['date_from']) || !empty($this->f['date_to'])) {
             $from = $this->f['date_from'] ?? null;
             $to   = $this->f['date_to']   ?? null;
@@ -195,6 +196,7 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
             elseif ($to)            $q->whereDate('ar.submitted_at', '<=', $to);
         }
 
+        // Keyword
         if (!empty($this->f['keyword'])) {
             $kw = '%'.$this->f['keyword'].'%';
             $q->where(function ($w) use ($kw) {
