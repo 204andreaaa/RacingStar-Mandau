@@ -24,19 +24,22 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
     private const BEFORE_SLOTS = 5;
     private const AFTER_SLOTS  = 5;
 
-    // FIXED size
+    // ukuran tampil di Excel
     private const THUMB_W_PX = 100;
     private const THUMB_H_PX = 120;
 
-    // Padding dalam sel (biar ada jarak di semua sisi)
-    private const PAD_X = 3;   // kiri/kanan
-    private const PAD_Y = 2;   // atas/bawah
+    // ukuran file thumbnail disimpan (lebih besar dikit biar tajam)
+    private const THUMB_W_SAVE = 300;
+    private const THUMB_H_SAVE = 360;
+    private const THUMB_QUALITY = 75;
+    private const THUMB_DIR = 'excel_thumbs';
 
-    // Gutter ekstra kecil untuk sisi kanan & bawah (biar gak mepet border)
+    // padding & gutter
+    private const PAD_X = 3;
+    private const PAD_Y = 2;
     private const GUTTER_X_PX = 1;
     private const GUTTER_Y_PX = 1;
 
-    // Row height mengikuti tinggi gambar + padding + gutter
     private const ROW_HEIGHT_PX = self::THUMB_H_PX + (self::PAD_Y * 2) + self::GUTTER_Y_PX;
 
     /** Lebar kolom teks */
@@ -60,6 +63,94 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
 
     public function __construct(array $filters = []) { $this->f = $filters; }
 
+    /* ============================================================
+       HELPER: bikin thumbnail kalau belum ada
+       - Support Intervention v2 (ImageManagerStatic)
+       - Support Intervention v3 (ImageManager + Driver)
+       - Fallback ke GD kalau Intervention nggak ada
+    ============================================================ */
+    private function makeThumb(?string $rel): ?string
+    {
+        if (!$rel) return null;
+        $rel = ltrim($rel, '/');
+        $src = Storage::disk('public')->path($rel);
+        if (!is_file($src)) return null;
+
+        $hash   = md5($rel.'|'.self::THUMB_W_SAVE.'x'.self::THUMB_H_SAVE.'|'.self::THUMB_QUALITY).'.jpg';
+        $dstRel = self::THUMB_DIR.'/'.$hash;
+        $dst    = Storage::disk('public')->path($dstRel);
+
+        if (is_file($dst)) return $dst;
+
+        @mkdir(dirname($dst), 0775, true);
+
+        // === Try Intervention v2 ===
+        if (class_exists('\\Intervention\\Image\\ImageManagerStatic')) {
+            $img = \Intervention\Image\ImageManagerStatic::make($src)
+                ->orientate()
+                ->fit(self::THUMB_W_SAVE, self::THUMB_H_SAVE, function($c){ $c->upsize(); })
+                ->encode('jpg', self::THUMB_QUALITY);
+            file_put_contents($dst, (string) $img);
+            return $dst;
+        }
+
+        // === Try Intervention v3 ===
+        if (class_exists('\\Intervention\\Image\\ImageManager')) {
+            // pilih driver yang tersedia
+            $driver = null;
+            if (class_exists('\\Intervention\\Image\\Drivers\\Gd\\Driver')) {
+                $driver = new \Intervention\Image\Drivers\Gd\Driver();
+            } elseif (class_exists('\\Intervention\\Image\\Drivers\\Imagick\\Driver')) {
+                $driver = new \Intervention\Image\Drivers\Imagick\Driver();
+            }
+
+            if ($driver) {
+                $manager = new \Intervention\Image\ImageManager($driver);
+                $image = $manager->read($src)
+                    ->orientate()
+                    ->cover(self::THUMB_W_SAVE, self::THUMB_H_SAVE);
+                $image->encode(new \Intervention\Image\Encoders\JpegEncoder(quality: self::THUMB_QUALITY));
+                $image->save($dst);
+                return $dst;
+            }
+        }
+
+        // === Fallback: GD murni (tanpa Intervention) ===
+        if (function_exists('imagecreatetruecolor')) {
+            $info = @getimagesize($src);
+            if (!$info) return null;
+
+            [$sw, $sh, $type] = $info;
+            switch ($type) {
+                case IMAGETYPE_JPEG: $srcIm = @imagecreatefromjpeg($src); break;
+                case IMAGETYPE_PNG:  $srcIm = @imagecreatefrompng($src);  break;
+                case IMAGETYPE_GIF:  $srcIm = @imagecreatefromgif($src);  break;
+                default: return null;
+            }
+            if (!$srcIm) return null;
+
+            // cover crop
+            $scale = max(self::THUMB_W_SAVE / $sw, self::THUMB_H_SAVE / $sh);
+            $nw = (int)ceil($sw * $scale);
+            $nh = (int)ceil($sh * $scale);
+            $tmp = imagecreatetruecolor($nw, $nh);
+            imagecopyresampled($tmp, $srcIm, 0, 0, 0, 0, $nw, $nh, $sw, $sh);
+
+            $dstIm = imagecreatetruecolor(self::THUMB_W_SAVE, self::THUMB_H_SAVE);
+            $ox = (int)max(0, ($nw - self::THUMB_W_SAVE) / 2);
+            $oy = (int)max(0, ($nh - self::THUMB_H_SAVE) / 2);
+            imagecopy($dstIm, $tmp, 0, 0, $ox, $oy, self::THUMB_W_SAVE, self::THUMB_H_SAVE);
+
+            imagejpeg($dstIm, $dst, self::THUMB_QUALITY);
+            imagedestroy($srcIm); imagedestroy($tmp); imagedestroy($dstIm);
+            return $dst;
+        }
+
+        // gagal semua
+        return null;
+    }
+
+    /* ============================================================ */
     public function collection()
     {
         $beforeSub = DB::table('activity_result_photos as p')
@@ -130,7 +221,6 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
     public function map($row): array
     {
         $this->rowNum++;
-
         $mapped = [
             $this->rowNum,
             $row->user_nama,
@@ -143,18 +233,13 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
             $row->note ?? '',
             is_string($row->submitted_at) ? $row->submitted_at : (optional($row->submitted_at)->format('Y-m-d H:i:s') ?? ''),
         ];
-
-        // placeholder kolom gambar
         for ($i=0; $i<(self::BEFORE_SLOTS + self::AFTER_SLOTS); $i++) $mapped[] = '';
-
         return $mapped;
     }
 
     public function columnFormats(): array
     {
-        return [
-            'J' => NumberFormat::FORMAT_DATE_YYYYMMDD2 . ' hh:mm:ss',
-        ];
+        return ['J' => NumberFormat::FORMAT_DATE_YYYYMMDD2 . ' hh:mm:ss'];
     }
 
     public function registerEvents(): array
@@ -167,7 +252,6 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
                 $start   = 2;
                 $lastRow = $start - 1 + count($this->rows);
 
-                // Lebar kolom teks
                 $sheet->getColumnDimension('A')->setWidth(self::COLW_NO_CH);
                 $sheet->getColumnDimension('B')->setWidth(self::COLW_USER_CH);
                 $sheet->getColumnDimension('C')->setWidth(self::COLW_ACTIVITY_CH);
@@ -179,9 +263,8 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
                 $sheet->getColumnDimension('I')->setWidth(self::COLW_NOTE_CH);
                 $sheet->getColumnDimension('J')->setWidth(self::COLW_SUBMIT_CH);
 
-                // Lebar kolom foto (K..)
                 $cellWpx     = self::THUMB_W_PX + self::PAD_X * 2 + self::GUTTER_X_PX;
-                $thumbCharW  = self::px2chars($cellWpx);   // cukup longgar sedikit untuk right-gap
+                $thumbCharW  = self::px2chars($cellWpx);
                 $firstImgIdx = 11; // K
                 $totalImg    = self::BEFORE_SLOTS + self::AFTER_SLOTS;
                 for ($i=0; $i<$totalImg; $i++) {
@@ -189,13 +272,11 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
                     $sheet->getColumnDimension($col)->setWidth($thumbCharW);
                 }
 
-                // Tinggi baris data
                 $rowPt = self::px2pt(self::ROW_HEIGHT_PX);
                 for ($r=$start; $r<=$lastRow; $r++) {
                     $sheet->getRowDimension($r)->setRowHeight($rowPt);
                 }
 
-                // Header style
                 $lastCol = Coordinate::stringFromColumnIndex($firstImgIdx + $totalImg - 1);
                 $sheet->getStyle("A1:{$lastCol}1")->getAlignment()
                       ->setHorizontal(Alignment::HORIZONTAL_CENTER)
@@ -203,22 +284,12 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
                 $sheet->getStyle("A1:{$lastCol}1")->getFill()->setFillType(Fill::FILL_SOLID)
                       ->getStartColor()->setRGB('93C47D');
 
-                // Wrap note
                 $sheet->getStyle("I2:I{$lastRow}")->getAlignment()->setWrapText(true);
-
-                // Freeze & AutoFilter
                 $sheet->freezePane('A2');
                 $sheet->setAutoFilter("A1:{$lastCol}1");
-
-                // Border tipis
                 $sheet->getStyle("A1:{$lastCol}{$lastRow}")
                       ->getBorders()->getAllBorders()
                       ->setBorderStyle(Border::BORDER_THIN);
-
-                // Rata kiri area foto (offset di drawings)
-                $sheet->getStyle(
-                    Coordinate::stringFromColumnIndex($firstImgIdx) . "2:" . $lastCol . $lastRow
-                )->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
             }
         ];
     }
@@ -230,9 +301,7 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
 
         $resolve = function (?string $path) {
             if (!$path) return null;
-            $path = ltrim($path, '/');
-            $full = Storage::disk('public')->path($path);
-            return is_file($full) ? $full : null;
+            return $this->makeThumb($path);
         };
 
         $startRow = 2;
@@ -240,7 +309,6 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
 
         foreach ($this->rows as $row) {
             $excelRow = $startRow + $rowIdx;
-
             $before = array_values(array_filter(explode('|', (string)($row->before_photos ?? ''))));
             $after  = array_values(array_filter(explode('|', (string)($row->after_photos  ?? ''))));
 
@@ -255,11 +323,10 @@ class AllResultsExport implements FromCollection, WithHeadings, WithMapping, Wit
 
                 $d = new Drawing();
                 $d->setPath($file);
-                $d->setResizeProportional(false); // 100x120 persis
+                $d->setResizeProportional(false);
                 $d->setWidth(self::THUMB_W_PX);
                 $d->setHeight(self::THUMB_H_PX);
                 $d->setCoordinates($colLetter.$excelRow);
-                // nempel kiri/atas sesuai padding → ada gap tipis di kanan & bawah karena gutter
                 $d->setOffsetX(self::PAD_X);
                 $d->setOffsetY(self::PAD_Y);
                 $drawings[] = $d;

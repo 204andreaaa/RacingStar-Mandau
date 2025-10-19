@@ -43,7 +43,7 @@ class AdminChecklistController extends Controller
 
         return response()->json(['total_star' => $total]);
     }
-    
+
     // Ambil ID region dari session auth_user (kalau ada).
     private function sessionRegionId(): ?int
     {
@@ -115,12 +115,18 @@ class AdminChecklistController extends Controller
                 }
             }
 
-            // Tanggal
+            // Tanggal → pakai CREATED_AT & inklusif (startOfDay/endOfDay)
             if ($request->filled('date_from') || $request->filled('date_to')) {
-                $from = $request->date_from; $to = $request->date_to;
-                if ($from && $to) $q->whereBetween(DB::raw('DATE(ar.submitted_at)'), [$from, $to]);
-                elseif ($from)   $q->whereDate('ar.submitted_at', '>=', $from);
-                elseif ($to)     $q->whereDate('ar.submitted_at', '<=', $to);
+                $from = $request->filled('date_from') ? Carbon::parse($request->date_from)->startOfDay() : null;
+                $to   = $request->filled('date_to')   ? Carbon::parse($request->date_to)->endOfDay()   : null;
+
+                if ($from && $to) {
+                    $q->whereBetween('ar.created_at', [$from, $to]);
+                } elseif ($from) {
+                    $q->where('ar.created_at', '>=', $from);
+                } elseif ($to) {
+                    $q->where('ar.created_at', '<=', $to);
+                }
             }
 
             // Keyword
